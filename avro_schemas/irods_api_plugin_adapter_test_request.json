@@ -1,0 +1,8 @@
+{
+    "type": "record",
+    "name": "api_plugin_adapter_test_request",
+    "fields" : [
+        {"name": "request_string", "type": "string"},
+        {"name": "response_string", "type": "string"}
+    ]
+}

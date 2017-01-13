@@ -1,0 +1,10 @@
+{
+    "type": "record",
+    "name": "api_envelope",
+    "fields" : [
+        {"name": "endpoint", "type": "string"},
+        {"name": "payload", "type": "bytes"},
+        {"name": "length", "type": "int"},
+        {"name": "control_channel_port", "type": "int"}
+    ]
+}
