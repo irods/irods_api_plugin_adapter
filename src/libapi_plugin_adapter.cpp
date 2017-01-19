@@ -78,16 +78,16 @@ int rs_api_plugin_adapter(
     try {
         // =-=-=-=-=-=-=-
         // unpack the avro api envelope 
-        std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(
-                static_cast<const uint8_t*>( _inp->buf ),
-                _inp->len );
-        avro::DecoderPtr dec = avro::binaryDecoder();
+        auto in = avro::memoryInputStream(
+                      static_cast<const uint8_t*>( _inp->buf ),
+                      _inp->len );
+        auto dec = avro::binaryDecoder();
         dec->init( *in );
         irods::api_envelope envelope;
         avro::decode( *dec, envelope );
 
         rodsLog(
-            LOG_DEBUG
+            LOG_DEBUG,
             "api_plugin_adapter calling endpoint [%s]",
             envelope.endpoint.c_str() );
 
@@ -103,7 +103,7 @@ int rs_api_plugin_adapter(
         // =-=-=-=-=-=-=-
         // initialize the API plugin with the payload
         try {
-            ep_ptr->initialize(envelope.payload);
+            ep_ptr->initialize(0, nullptr, envelope.payload);
         }
         catch(const irods::exception& _e) {
             addRErrorMsg(
@@ -130,7 +130,7 @@ int rs_api_plugin_adapter(
         }
 
         try {
-            std::vector< uint8_t >* out;
+            std::vector< uint8_t >* out = nullptr;
             ep_ptr->finalize(out);
 
             if(out && !out->empty()) {

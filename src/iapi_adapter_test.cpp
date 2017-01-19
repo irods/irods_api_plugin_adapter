@@ -58,7 +58,7 @@ void client_thread_executor( irods::api_endpoint* _ep_ptr ) {
 
 
 int
-main( int, char** ) {
+main( int _argc, char* _argv[] ) {
 
     signal( SIGPIPE, SIG_IGN );
 
@@ -115,8 +115,7 @@ main( int, char** ) {
     // =-=-=-=-=-=-=-
     // initialize the client-side of the endpoint
     try {
-        //TODO: add additional command line params here
-        ep_ptr->initialize(envelope.payload);
+        ep_ptr->initialize(_argc, _argv, envelope.payload);
     }
     catch(const irods::exception& _e) {
         std::cerr << "failed to initialize endpoint " 
@@ -125,11 +124,11 @@ main( int, char** ) {
         return 1;
     }
 
-    std::auto_ptr< avro::OutputStream > out = avro::memoryOutputStream();
-    avro::EncoderPtr enc = avro::binaryEncoder();
+    auto out = avro::memoryOutputStream();
+    auto enc = avro::binaryEncoder();
     enc->init( *out );
     avro::encode( *enc, envelope );
-    boost::shared_ptr< std::vector< uint8_t > > data = avro::snapshot( *out );
+    auto data = avro::snapshot( *out );
 
     bytesBuf_t inp;
     memset(&inp, 0, sizeof(bytesBuf_t));
@@ -146,8 +145,8 @@ main( int, char** ) {
         printErrorStack( conn->rError );
     }
     else {
-        bytesBuf_t* out = static_cast<bytesBuf_t*>( tmp_out );
-        if ( out != NULL ) {
+        if ( tmp_out != NULL ) {
+            bytesBuf_t* out = static_cast<bytesBuf_t*>( tmp_out );
             printf( "\n\nresponse [%s]\n", out->buf );
         }
         else {

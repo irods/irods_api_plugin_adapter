@@ -29,8 +29,23 @@ void api_adapter_test_executor_server_to_server(
 
 void api_adapter_test_executor_server(
     irods::api_endpoint*  _endpoint ) {
-
+    // =-=-=-=-=-=-=-
+    //TODO: parameterize
     irods::message_broker bro("tcp://*:1246", "ZMQ_REP");
+
+    // =-=-=-=-=-=-=-
+    // fetch the payload to extract the response string
+    irods::api_plugin_adapter_test_request api_req;
+    try {
+        _endpoint->payload<irods::api_plugin_adapter_test_request>(api_req);
+    }
+    catch(const boost::bad_any_cast& _e) {
+        // end of protocol
+        std::cerr << _e.what() << std::endl;
+        _endpoint->done(true);
+        //TODO: notify client of failure
+        return;
+    }
 
     irods::message_broker::data_type req_data;
     bro.recieve(req_data);
@@ -38,14 +53,17 @@ void api_adapter_test_executor_server(
     std::string req_string;
     req_string.assign(req_data.begin(), req_data.end());
     std::cout << "SERVER RECEIVED request: " << req_string << std::endl;
-   
+
     // "do stuff"
     std::cout << "SERVER doing some work" << std::endl;
     std::cout << "SERVER doing some more work" << std::endl;
 
     // =-=-=-=-=-=-=-
     // copy generic test response string to a data buffer
-    std::string resp_string("this is a test RESPONSE.  this is only a test.");
+    std::string resp_string("this is a test [");
+    resp_string += api_req.response_string;
+    resp_string += "], this is only a test";
+
     irods::message_broker::data_type resp_data;
     resp_data.assign(resp_string.begin(), resp_string.end()); 
     
@@ -68,11 +86,30 @@ void api_adapter_test_executor_server(
 
 void api_adapter_test_executor_client(
     irods::api_endpoint*  _endpoint ) {
+    // =-=-=-=-=-=-=-
+    //TODO: parameterize
     irods::message_broker bro("tcp://localhost:1246", "ZMQ_REQ");
 
     // =-=-=-=-=-=-=-
+    // fetch the payload to extract the request string
+    irods::api_plugin_adapter_test_request api_req;
+    try {
+        _endpoint->payload<irods::api_plugin_adapter_test_request>(api_req);
+    }
+    catch(const boost::bad_any_cast& _e) {
+        // end of protocol
+        std::cerr << _e.what() << std::endl;
+        _endpoint->done(true);
+        //TODO: notify server of failure
+        return;
+    }
+
+    // =-=-=-=-=-=-=-
     // copy generic test request string to a data buffer
-    std::string req_string("this is a test *REQUEST*.  this is only a test.");
+    std::string req_string("this is a test [");
+    req_string += api_req.request_string;
+    req_string += "],  this is only a test.";
+
     irods::message_broker::data_type req_data;
     req_data.assign(req_string.begin(), req_string.end()); 
 
@@ -110,32 +147,46 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
         ~api_adapter_test_api_endpoint() {
         }
 
-        void initialize(const std::vector<uint8_t>& _payload) {
-            if(_payload.empty()) {
-                return;
+        void init_and_serialize_payload(
+            int                   _argc,
+            char*                 _argv[],
+            std::vector<uint8_t>& _out) {
+            for( auto i=0; i<_argc; ++i) {
+                std::cout << "arg["<<i<<"] = " << _argv[i] << std::endl;
             }
 
-            try {
-                std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(
-                                                          &_payload[0],
-                                                          _payload.size());
-                avro::DecoderPtr dec = avro::binaryDecoder();
-                dec->init( *in );
-
-                irods::api_plugin_adapter_test_request t_req;
-                avro::decode( *dec, t_req );
-
-                payload_ = t_req;
-            } catch( const avro::Exception& _e ) {
-                rodsLog(
-                    LOG_ERROR,
-                    "[%s]:[%d] exception caught [%s]",
-                    __FUNCTION__,
-                    __LINE__,
-                    _e.what());
-                throw;
+            irods::api_plugin_adapter_test_request req;
+            req.request_string = "DEFAULT_REQUEST";
+            req.response_string = "DEFAULT_RESPONSE";
+            if(_argc >= 2 ) {
+                req.request_string  = _argv[1];
+                req.response_string = _argv[2];
             }
-        } // initialize
+
+            auto out = avro::memoryOutputStream();
+            auto enc = avro::binaryEncoder();
+            enc->init( *out );
+            avro::encode( *enc, req );
+            auto data = avro::snapshot( *out );
+
+            // copy for transmission to server
+            _out = *data;
+
+            // copy for client side use also
+            payload_ = req;
+        }
+
+        void decode_and_assign_payload(
+            const std::vector<uint8_t>& _in) {
+            auto in = avro::memoryInputStream(
+                          &_in[0],
+                          _in.size());
+            auto dec = avro::binaryDecoder();
+            dec->init( *in );
+            irods::api_plugin_adapter_test_request t_req;
+            avro::decode( *dec, t_req );
+            payload_ = t_req;
+        }
 
         // =-=-=-=-=-=-=- 
         // function which captures any final output to respond back
@@ -148,7 +199,7 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
             memcpy(_out->data(), msg, sizeof(msg));
         }
 
-        void invoke() {//irods::message_broker& _msg_broker) {
+        void invoke() {
             // =-=-=-=-=-=-=- 
             // start thread based on context string 
             try {
