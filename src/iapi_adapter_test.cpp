@@ -57,8 +57,33 @@ void client_thread_executor( irods::api_endpoint* _ep_ptr ) {
 } // client_thread_executor
 
 
-int
-main( int _argc, char* _argv[] ) {
+int main( int _argc, char* _argv[] ) {
+    if(1 >= _argc) {
+        std::cerr << "iapi_adapter_test api_v5_endpoint [...]" << std::endl;
+        return 1;
+    }
+
+    // =-=-=-=-=-=-=-
+    // create the envelope for the given endpoint
+    irods::api_envelope envelope;
+    envelope.endpoint = _argv[1];
+    envelope.length = 0;
+    //TODO: parameterize
+    envelope.control_channel_port = 1246;
+    envelope.payload.clear();
+
+    // =-=-=-=-=-=-=-
+    // initialize the client-side of the endpoint
+    irods::api_endpoint* ep_ptr = nullptr;
+    irods::error ret = create_command_object(
+                           envelope.endpoint,
+                           ep_ptr);
+    if(!ret.ok()) {
+        std::cout << "invalid endpoint: "
+                  << envelope.endpoint
+                  << std::endl;
+        return ret.code();
+    }
 
     signal( SIGPIPE, SIG_IGN );
 
@@ -94,22 +119,6 @@ main( int _argc, char* _argv[] ) {
             rcDisconnect( conn );
             exit( 7 );
         }
-    }
-
-    // =-=-=-=-=-=-=-
-    // create the envelope for the given endpoint
-    irods::api_envelope envelope;
-    envelope.endpoint = "api_plugin_adapter_test";
-    envelope.length = 0;
-    envelope.control_channel_port = 1246;
-    envelope.payload.clear();
-
-    // =-=-=-=-=-=-=-
-    // initialize the client-side of the endpoint
-    irods::api_endpoint* ep_ptr = nullptr;
-    irods::error ret = create_command_object(envelope.endpoint, ep_ptr);
-    if(!ret.ok()) {
-        std::cout << ret.result() << std::endl;
     }
 
     // =-=-=-=-=-=-=-

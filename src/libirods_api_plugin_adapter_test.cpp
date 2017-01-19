@@ -147,6 +147,8 @@ void api_adapter_test_executor_client(
 
 class api_adapter_test_api_endpoint : public irods::api_endpoint {
     public:
+        // =-=-=-=-=-=-=-
+        // provide thread executors to the invoke() method
         void capture_executors(
                 thread_executor& _cli,
                 thread_executor& _svr,
@@ -161,6 +163,8 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
             status_(0) {
         }
 
+        // =-=-=-=-=-=-=-
+        // used for client-side initialization
         void init_and_serialize_payload(
             int                   _argc,
             char*                 _argv[],
@@ -172,9 +176,11 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
             api_req_t req;
             req.request_string = "DEFAULT_REQUEST";
             req.response_string = "DEFAULT_RESPONSE";
-            if(_argc >= 2 ) {
-                req.request_string  = _argv[1];
-                req.response_string = _argv[2];
+            if(_argc >= 3 ) {
+                req.request_string  = _argv[2];
+            }
+            if(_argc >= 4 ) {
+                req.response_string = _argv[3];
             }
 
             auto out = avro::memoryOutputStream();
@@ -190,6 +196,8 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
             payload_ = req;
         }
 
+        // =-=-=-=-=-=-=-
+        // used for server-side initialization
         void decode_and_assign_payload(
             const std::vector<uint8_t>& _in) {
             auto in = avro::memoryInputStream(
@@ -213,6 +221,8 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
             memcpy(_out->data(), msg, sizeof(msg));
         }
 
+        // =-=-=-=-=-=-=-
+        // provide an error code and string to the client
         int status(rError_t* _err) {
             if(status_ < 0) {
                 addRErrorMsg(
