@@ -43,7 +43,7 @@ void client_thread_executor( irods::api_endpoint* _ep_ptr ) {
         // =-=-=-=-=-=-=-
         // start the client api thread
         try {
-            _ep_ptr->invoke();//msg_broker);
+            _ep_ptr->invoke();
         }
         catch( const irods::exception& _e ) {
             irods::log(_e);

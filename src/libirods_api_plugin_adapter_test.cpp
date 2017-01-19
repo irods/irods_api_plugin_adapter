@@ -22,6 +22,9 @@
 #include <iostream>
 #include <thread>
 
+typedef irods::api_plugin_adapter_test_request api_req_t;
+
+extern "C" {
 void api_adapter_test_executor_server_to_server(
     irods::api_endpoint*  _endpoint ) {
     return;
@@ -29,15 +32,17 @@ void api_adapter_test_executor_server_to_server(
 
 void api_adapter_test_executor_server(
     irods::api_endpoint*  _endpoint ) {
+    typedef irods::message_broker::data_type data_t;
+
     // =-=-=-=-=-=-=-
     //TODO: parameterize
     irods::message_broker bro("tcp://*:1246", "ZMQ_REP");
 
     // =-=-=-=-=-=-=-
     // fetch the payload to extract the response string
-    irods::api_plugin_adapter_test_request api_req;
+    api_req_t api_req;
     try {
-        _endpoint->payload<irods::api_plugin_adapter_test_request>(api_req);
+        _endpoint->payload<api_req_t>(api_req);
     }
     catch(const boost::bad_any_cast& _e) {
         // end of protocol
@@ -47,7 +52,7 @@ void api_adapter_test_executor_server(
         return;
     }
 
-    irods::message_broker::data_type req_data;
+    data_t req_data;
     bro.recieve(req_data);
 
     std::string req_string;
@@ -64,7 +69,7 @@ void api_adapter_test_executor_server(
     resp_string += api_req.response_string;
     resp_string += "], this is only a test";
 
-    irods::message_broker::data_type resp_data;
+    data_t resp_data;
     resp_data.assign(resp_string.begin(), resp_string.end()); 
     
     std::cout << "SERVER doing some more work" << std::endl;
@@ -86,15 +91,16 @@ void api_adapter_test_executor_server(
 
 void api_adapter_test_executor_client(
     irods::api_endpoint*  _endpoint ) {
+    typedef irods::message_broker::data_type data_t;
     // =-=-=-=-=-=-=-
     //TODO: parameterize
     irods::message_broker bro("tcp://localhost:1246", "ZMQ_REQ");
 
     // =-=-=-=-=-=-=-
     // fetch the payload to extract the request string
-    irods::api_plugin_adapter_test_request api_req;
+    api_req_t api_req;
     try {
-        _endpoint->payload<irods::api_plugin_adapter_test_request>(api_req);
+        _endpoint->payload<api_req_t>(api_req);
     }
     catch(const boost::bad_any_cast& _e) {
         // end of protocol
@@ -110,7 +116,7 @@ void api_adapter_test_executor_client(
     req_string += api_req.request_string;
     req_string += "],  this is only a test.";
 
-    irods::message_broker::data_type req_data;
+    data_t req_data;
     req_data.assign(req_string.begin(), req_string.end()); 
 
     // =-=-=-=-=-=-=-
@@ -122,7 +128,7 @@ void api_adapter_test_executor_client(
     std::cout << "CLIENT doing some work" << std::endl;
     std::cout << "CLIENT doing some work" << std::endl;
 
-    irods::message_broker::data_type resp_data;
+    data_t resp_data;
     bro.recieve(resp_data);
     
     std::cout << "CLIENT doing some more work" << std::endl;
@@ -137,14 +143,22 @@ void api_adapter_test_executor_client(
     return;
 
 } // api_adapter_test_executor
+}; // extern C
 
 class api_adapter_test_api_endpoint : public irods::api_endpoint {
     public:
-        api_adapter_test_api_endpoint(const std::string& _ctx) :
-            irods::api_endpoint(_ctx) {
+        void capture_executors(
+                thread_executor& _cli,
+                thread_executor& _svr,
+                thread_executor& _svr_to_svr) {
+            _cli        = api_adapter_test_executor_client;
+            _svr        = api_adapter_test_executor_server;
+            _svr_to_svr = api_adapter_test_executor_server_to_server;
         }
 
-        ~api_adapter_test_api_endpoint() {
+        api_adapter_test_api_endpoint(const std::string& _ctx) :
+            irods::api_endpoint(_ctx),
+            status_(0) {
         }
 
         void init_and_serialize_payload(
@@ -155,7 +169,7 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
                 std::cout << "arg["<<i<<"] = " << _argv[i] << std::endl;
             }
 
-            irods::api_plugin_adapter_test_request req;
+            api_req_t req;
             req.request_string = "DEFAULT_REQUEST";
             req.response_string = "DEFAULT_RESPONSE";
             if(_argc >= 2 ) {
@@ -183,9 +197,9 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
                           _in.size());
             auto dec = avro::binaryDecoder();
             dec->init( *in );
-            irods::api_plugin_adapter_test_request t_req;
-            avro::decode( *dec, t_req );
-            payload_ = t_req;
+            api_req_t req;
+            avro::decode( *dec, req );
+            payload_ = req;
         }
 
         // =-=-=-=-=-=-=- 
@@ -199,53 +213,20 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
             memcpy(_out->data(), msg, sizeof(msg));
         }
 
-        void invoke() {
-            // =-=-=-=-=-=-=- 
-            // start thread based on context string 
-            try {
-                irods::api_plugin_adapter_test_request test_req;
-                if(!payload_.empty()) {
-                    test_req = boost::any_cast<irods::api_plugin_adapter_test_request>(payload_);
-                }
-
-                if(irods::API_EP_CLIENT == context_) {
-                    thread_ = std::unique_ptr<std::thread>(new std::thread(
-                                  api_adapter_test_executor_client, this));
-                }
-                else if(irods::API_EP_SERVER == context_) {
-                    thread_ = std::unique_ptr<std::thread>(new std::thread(
-                                  api_adapter_test_executor_server, this));
-                }
-                else if(irods::API_EP_SVR_TO_SVR == context_) {
-                    thread_ = std::unique_ptr<std::thread>(new std::thread(
-                                  api_adapter_test_executor_server_to_server, this));
-                }
-                else {
-                    //TODO: be very angry here
-                    rodsLog(
-                        LOG_ERROR,
-                        "[%s]:[%d] invalid ctx [%s]",
-                        __FUNCTION__,
-                        __LINE__,
-                        context_.c_str());
-                }
-
-                // wait for the api thread to finish
-                thread_->join();
-
-            } catch( const boost::bad_any_cast& ) {
-                rodsLog(
-                    LOG_ERROR,
-                    "[%s]:[%d] exception caught - bad any cast",
-                    __FUNCTION__,
-                    __LINE__);
-                throw;
+        int status(rError_t* _err) {
+            if(status_ < 0) {
+                addRErrorMsg(
+                    _err,
+                    status_,
+                    error_message_.str().c_str());
             }
-        } // invoke
+            return status_;
+        }
 
     private:
+        int status_;
         std::stringstream error_message_;
-        std::unique_ptr<std::thread> thread_;
+
 }; // class api_endpoint
 
 extern "C" {
