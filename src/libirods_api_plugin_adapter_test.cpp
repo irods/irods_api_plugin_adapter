@@ -43,7 +43,7 @@ void api_adapter_test_executor_server(
     const int  end_port = irods::get_server_property<const int>(
                               irods::CFG_SERVER_PORT_RANGE_END_KW);
     int port = bro.bind_to_port_in_range(start_port, end_port);
-    _endpoint->port_for_bind(port);
+    _endpoint->port(port);
 
     // =-=-=-=-=-=-=-
     // fetch the payload to extract the response string
@@ -98,7 +98,7 @@ void api_adapter_test_executor_client(
     //TODO: parameterize
     irods::message_broker bro("ZMQ_REQ");
 
-    int port = _endpoint->port_for_bind();
+    int port = _endpoint->port();
     std::stringstream conn_sstr;
     conn_sstr << "tcp://localhost:";
     conn_sstr << port;

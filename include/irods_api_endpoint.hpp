@@ -34,19 +34,19 @@ namespace irods {
         virtual void decode_and_assign_payload(const std::vector<uint8_t>&) = 0;
         virtual void capture_executors(thread_executor&,thread_executor&,thread_executor&) = 0;
 
-        int port_for_bind() {
-            if(UNINITIALIZED_PORT == port_for_bind_) {
+        int port() {
+            if(UNINITIALIZED_PORT == port_) {
                 std::unique_lock<std::mutex> l(mut_);
                 cond_.wait(l);
-                return port_for_bind_;
+                return port_;
             }
             else {
-                return port_for_bind_;
+                return port_;
             }
         }
 
-        void port_for_bind( int _p ) {
-            port_for_bind_ = _p;
+        void port( int _p ) {
+            port_= _p;
             cond_.notify_one();
         }
 
@@ -145,7 +145,7 @@ namespace irods {
         boost::any       payload_;
         std::atomic_bool done_flag_;
         std::atomic_int  status_;
-        std::atomic_int  port_for_bind_;
+        std::atomic_int  port_;
         std::unique_ptr<std::thread> thread_;
 
         std::condition_variable cond_;

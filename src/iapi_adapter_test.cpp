@@ -154,7 +154,7 @@ int main( int _argc, char* _argv[] ) {
     else {
         if ( tmp_out != NULL ) {
             portalOprOut_t* portal = static_cast<portalOprOut_t*>( tmp_out );
-            ep_ptr->port_for_bind(portal->portList.portNum);
+            ep_ptr->port(portal->portList.portNum);
             std::thread client_thread(
                 client_thread_executor,
                 ep_ptr);

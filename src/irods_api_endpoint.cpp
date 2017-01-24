@@ -8,7 +8,7 @@ namespace irods {
         context_(_ctx),
         done_flag_(false),
         status_(0),
-        port_for_bind_(UNINITIALIZED_PORT) {
+        port_(UNINITIALIZED_PORT) {
     }
    
     api_endpoint::~api_endpoint() {
