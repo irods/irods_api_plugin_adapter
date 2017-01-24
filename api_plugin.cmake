@@ -141,7 +141,6 @@ foreach(PLUGIN ${IRODS_API_PLUGINS})
   target_compile_options(${PLUGIN} PRIVATE -Wno-write-strings)
   set_property(TARGET ${PLUGIN} PROPERTY CXX_STANDARD ${IRODS_CXX_STANDARD})
 
-
   install(
     TARGETS
     ${PLUGIN}

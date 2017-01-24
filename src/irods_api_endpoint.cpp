@@ -5,10 +5,15 @@
 
 namespace irods {
     api_endpoint::api_endpoint(const std::string& _ctx) :
-        context_(_ctx) {
+        context_(_ctx),
+        done_flag_(false),
+        status_(0),
+        port_for_bind_(UNINITIALIZED_PORT) {
     }
    
     api_endpoint::~api_endpoint() {
+        // wait for the api thread to finish
+        thread_->join();
     }
 
     int api_endpoint::status(rError_t*) { return status_; }

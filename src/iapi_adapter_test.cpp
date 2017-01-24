@@ -5,6 +5,7 @@
 #include "parseCommandLine.h"
 #include "rodsPath.h"
 #include "lsUtil.h"
+#include "oprComplete.h"
 
 #include "irods_client_api_table.hpp"
 #include "irods_pack_table.hpp"
@@ -144,29 +145,30 @@ int main( int _argc, char* _argv[] ) {
     inp.len = data->size();
     inp.buf = data->data();
 
-    std::thread client_thread(client_thread_executor, ep_ptr);
-
     void *tmp_out = NULL;
     status = procApiRequest( conn, 5000, &inp, NULL,
                              &tmp_out, NULL );
-
     if ( status < 0 ) {
         printErrorStack( conn->rError );
     }
     else {
         if ( tmp_out != NULL ) {
-            bytesBuf_t* out = static_cast<bytesBuf_t*>( tmp_out );
-            printf( "\n\nresponse [%s]\n", out->buf );
+            portalOprOut_t* portal = static_cast<portalOprOut_t*>( tmp_out );
+            ep_ptr->port_for_bind(portal->portList.portNum);
+            std::thread client_thread(
+                client_thread_executor,
+                ep_ptr);
+            client_thread.join();
         }
         else {
             printf( "ERROR: the 'out' variable is null\n" );
         }
     }
-    
-    client_thread.join();
+
+    rcOprComplete(conn, 0);
 
     rcDisconnect( conn );
-        
+
     return status;
 }
 

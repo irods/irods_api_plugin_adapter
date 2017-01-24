@@ -36,7 +36,14 @@ void api_adapter_test_executor_server(
 
     // =-=-=-=-=-=-=-
     //TODO: parameterize
-    irods::message_broker bro("tcp://*:1246", "ZMQ_REP");
+    irods::message_broker bro("ZMQ_REP");
+
+    const int start_port = irods::get_server_property<const int>(
+                               irods::CFG_SERVER_PORT_RANGE_START_KW);
+    const int  end_port = irods::get_server_property<const int>(
+                              irods::CFG_SERVER_PORT_RANGE_END_KW);
+    int port = bro.bind_to_port_in_range(start_port, end_port);
+    _endpoint->port_for_bind(port);
 
     // =-=-=-=-=-=-=-
     // fetch the payload to extract the response string
@@ -46,7 +53,7 @@ void api_adapter_test_executor_server(
     }
     catch(const boost::bad_any_cast& _e) {
         // end of protocol
-        std::cerr << _e.what() << std::endl;
+        irods::log(LOG_ERROR, _e.what());
         _endpoint->done(true);
         //TODO: notify client of failure
         return;
@@ -57,7 +64,7 @@ void api_adapter_test_executor_server(
 
     std::string req_string;
     req_string.assign(req_data.begin(), req_data.end());
-    std::cout << "SERVER RECEIVED request: " << req_string << std::endl;
+    std::cout << "SERVER received request from client [" << req_string << "]" << std::endl;
 
     // "do stuff"
     std::cout << "SERVER doing some work" << std::endl;
@@ -71,16 +78,11 @@ void api_adapter_test_executor_server(
 
     data_t resp_data;
     resp_data.assign(resp_string.begin(), resp_string.end()); 
+    std::cout << "SERVER sending response [" << resp_string << "]" << std::endl;
     
-    std::cout << "SERVER doing some more work" << std::endl;
-
     // =-=-=-=-=-=-=-
     // set the message for sending, then block 
-    std::cout << "SERVER sending: " << resp_string << std::endl;
-
     bro.send( resp_data );
-    
-    std::cout << "SERVER doing some more work" << std::endl;
     
     // end of protocol
     _endpoint->done(true);
@@ -94,7 +96,13 @@ void api_adapter_test_executor_client(
     typedef irods::message_broker::data_type data_t;
     // =-=-=-=-=-=-=-
     //TODO: parameterize
-    irods::message_broker bro("tcp://localhost:1246", "ZMQ_REQ");
+    irods::message_broker bro("ZMQ_REQ");
+
+    int port = _endpoint->port_for_bind();
+    std::stringstream conn_sstr;
+    conn_sstr << "tcp://localhost:";
+    conn_sstr << port;
+    bro.connect(conn_sstr.str());
 
     // =-=-=-=-=-=-=-
     // fetch the payload to extract the request string
@@ -114,14 +122,14 @@ void api_adapter_test_executor_client(
     // copy generic test request string to a data buffer
     std::string req_string("this is a test [");
     req_string += api_req.request_string;
-    req_string += "],  this is only a test.";
+    req_string += "], this is only a test.";
 
     data_t req_data;
     req_data.assign(req_string.begin(), req_string.end()); 
 
     // =-=-=-=-=-=-=-
     // set the message for sending, then block 
-    std::cout << "CLIENT sending: " << req_string << std::endl;
+    std::cout << "CLIENT sending: [" << req_string << "]" << std::endl;
     bro.send( req_data );
     
     // "do stuff"
@@ -135,7 +143,7 @@ void api_adapter_test_executor_client(
 
     std::string resp_string;
     resp_string.assign(resp_data.begin(), resp_data.end());
-    std::cout << "CLIENT RECEIVED response: " << resp_string << std::endl;
+    std::cout << "CLIENT RECEIVED response: [" << resp_string << "]" << std::endl;
    
     // end of protocol
     _endpoint->done(true);
@@ -208,17 +216,6 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
             api_req_t req;
             avro::decode( *dec, req );
             payload_ = req;
-        }
-
-        // =-=-=-=-=-=-=- 
-        // function which captures any final output to respond back
-        // to the client using the legacy protocol
-        void finalize(std::vector<uint8_t>*& _out) {
-            char msg[] = { "this is the OUTPUT message from FINALIZE" };
-            _out = new std::vector<uint8_t>();
-
-            _out->resize(sizeof(msg));
-            memcpy(_out->data(), msg, sizeof(msg));
         }
 
         // =-=-=-=-=-=-=-

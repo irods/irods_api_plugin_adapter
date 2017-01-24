@@ -30,16 +30,20 @@ set(CMAKE_INSTALL_RPATH ${IRODS_EXTERNALS_FULLPATH_CLANG_RUNTIME}/lib)
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++")
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -stdlib=libc++")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -stdlib=libc++")
+
 add_compile_options(-nostdinc++ -Wall -Wextra -Werror -Wno-unused-parameter)
+
 link_libraries(c++abi)
 link_libraries(pthread)
 link_libraries(dl)
+
 include_directories(${IRODS_EXTERNALS_FULLPATH_CLANG}/include/c++/v1)
+
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-z,defs")
 
-include(icommand.cmake)
 include(api_plugin.cmake)
 include(api_v5_plugin.cmake)
+include(icommand.cmake)
 
 set(CPACK_PACKAGE_FILE_NAME "irods-api-plugin-adapter${IRODS_PACKAGE_FILE_NAME_SUFFIX}")
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)

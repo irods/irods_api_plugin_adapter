@@ -4,12 +4,13 @@
 #include "rodsPackInstruct.h"
 #include "objStat.h"
 #include "rcMisc.h"
+#include "rsApiHandler.hpp"
 
 #include "irods_stacktrace.hpp"
 #include "irods_server_api_call.hpp"
 #include "irods_re_serialization.hpp"
-#include "irods_load_plugin.hpp"
 #include "irods_server_properties.hpp"
+#include "irods_random.hpp"
 
 #include "irods_api_envelope.hpp"
 #include "irods_api_endpoint.hpp"
@@ -24,14 +25,21 @@
 #include <string>
 #include <iostream>
 
+void clear_portal(void* _in) {
+}
+
+#ifdef RODS_SERVER
+#include "irods_load_plugin.hpp"
+
+
 int call_api_plugin_adapter(
     irods::api_entry* _api,
     rsComm_t*         _comm,
     bytesBuf_t*       _inp,
-    bytesBuf_t**      _out ) {
+    portalOprOut_t**  _out ) {
     return _api->call_handler<
                bytesBuf_t*,
-               bytesBuf_t** >(
+               portalOprOut_t** >(
                    _comm,
                    _inp,
                    _out );
@@ -45,35 +53,39 @@ void clear_bytes_buf(void* _in) {
     in->buf = 0;
 }
 
-#ifdef RODS_SERVER
+
     #define CALL_API_PLUGIN_ADAPTER call_api_plugin_adapter 
 #else
     #define CALL_API_PLUGIN_ADAPTER NULL 
 #endif
 
-irods::error create_command_object(
-    const std::string&    _ep_name,
-    irods::api_endpoint*& _endpoint ) {
+#ifdef RODS_SERVER
+//TODO: throw irods::exception
+std::unique_ptr<irods::api_endpoint> create_command_object(
+    const std::string& _ep_name ) {
 
+    irods::api_endpoint* ep_ptr = nullptr;
     irods::error ret = irods::load_plugin<irods::api_endpoint>(
-                           _endpoint,
+                           ep_ptr,
                            _ep_name + "_server",
                            "api_v5",
                            "version_5_endpoint",
                            irods::API_EP_SERVER);
-    if(!_endpoint || !ret.ok()) {
-        return PASS(ret);
+    if(!ep_ptr || !ret.ok()) {
+        THROW(ret.code(), ret.result());
     }
 
-    return SUCCESS();
+    return std::unique_ptr<irods::api_endpoint>(ep_ptr);
 }
 
 // =-=-=-=-=-=-=-
 // api function to be referenced by the entry
 int rs_api_plugin_adapter(
-    rsComm_t*    _comm,
-    bytesBuf_t*  _inp,
-    bytesBuf_t** _out ) {
+    rsComm_t*        _comm,
+    bytesBuf_t*      _inp,
+    portalOprOut_t** _portal_out ) {
+
+    _comm->portalOpr = 0;
 
     try {
         // =-=-=-=-=-=-=-
@@ -93,68 +105,57 @@ int rs_api_plugin_adapter(
 
         // =-=-=-=-=-=-=-
         // load the api_v5 plugin and get the handle
-        irods::api_endpoint* ep_ptr = nullptr;
-        irods::error ret = create_command_object(envelope.endpoint, ep_ptr);
-        if(!ret.ok()) {
-            irods::log(PASS(ret));
-            return ret.code();
-        }
-
+        std::unique_ptr<irods::api_endpoint> ep_ptr = create_command_object(
+                                                          envelope.endpoint);
         // =-=-=-=-=-=-=-
         // initialize the API plugin with the payload
-        try {
-            ep_ptr->initialize(0, nullptr, envelope.payload);
-        }
-        catch(const irods::exception& _e) {
-            addRErrorMsg(
-                &_comm->rError,
-                SYS_NULL_INPUT,
-                "failed to initialize api endpoint" );
-            return SYS_INVALID_INPUT_PARAM;
-        }
+        ep_ptr->initialize(0, nullptr, envelope.payload);
 
-        try {
-            // =-=-=-=-=-=-=-
-            // start the api thread
-            try {
-                ep_ptr->invoke();
-            }
-            catch( const irods::exception& _e ) {
-                irods::log(_e);
-                throw;
-            }
-        }
-        catch( const zmq::error_t& _e ) {
-            std::cerr << _e.what() << std::endl;
-            return 1;
-        }
+        // =-=-=-=-=-=-=-
+        // start the api thread
+        ep_ptr->invoke();
 
-        try {
-            std::vector< uint8_t >* out = nullptr;
-            ep_ptr->finalize(out);
+        // =-=-=-=-=-=-=-
+        // capture the port bound by zmq and pack it
+        // into the portalOprOut
+        (*_portal_out) = (portalOprOut_t*) malloc(sizeof(portalOprOut_t));
+        memset(*_portal_out, 0, sizeof(portalOprOut_t));
+        (*_portal_out)->portList.portNum = ep_ptr->port_for_bind();
+        (*_portal_out)->portList.cookie = ( int )( irods::getRandom<unsigned int>() >> 1 );
+        strcpy( (*_portal_out)->portList.hostAddr, "avogadro.renci.org");
 
-            if(out && !out->empty()) {
-                *_out = (bytesBuf_t*)malloc(sizeof(bytesBuf_t));
-                memset(*_out, 0, sizeof(bytesBuf_t));
-                (*_out)->len = out->size();
-                (*_out)->buf = out->data();;
-            }
-            else {
-                delete out;
-            }
+        int ret = sendAndRecvBranchMsg(
+                      _comm,
+                      _comm->apiInx,
+                      0,
+                      (void*) *_portal_out,
+                      NULL);
+        if(ret < 0) {
+            rodsLog(
+                LOG_ERROR,
+                "%s - sendAndRecvBranchMsg: %d",
+                __FUNCTION__,
+                ret);
         }
-        catch( const irods::exception& _e ) {
-            irods::log(_e);
-        }
-
-        delete ep_ptr;
     }
-    catch( const avro::Exception& _e ) {
-
+    catch( const irods::exception& _e ) {
+        //TODO: add irods exception to _out?
+        irods::log(_e);
+        return _e.code();
+    }
+    catch( const zmq::error_t& _e ) {
+        //TODO: add irods exception to _out?
+        irods::log(LOG_ERROR, _e.what());
+        return SYS_SOCK_CONNECT_ERR;
     }
 
-    return 0;
+    return SYS_NO_HANDLER_REPLY_MSG;;
 }
+
+std::function<int( rsComm_t*, bytesBuf_t*, portalOprOut_t**)> plugin_op = rs_api_plugin_adapter;
+#else
+std::function<int( rsComm_t*, bytesBuf_t*, portalOprOut_t**)> plugin_op;
+#endif
 
 extern "C" {
     // =-=-=-=-=-=-=-
@@ -169,12 +170,10 @@ extern "C" {
                                 NO_USER_AUTH,     // client auth
                                 NO_USER_AUTH,     // proxy auth
                                 "BytesBuf_PI", 0, // in PI / bs flag
-                                "BytesBuf_PI", 0, // out PI / bs flag
-                                std::function<
-                                    int( rsComm_t*, bytesBuf_t*, bytesBuf_t**)>(
-                                        rs_api_plugin_adapter), // operation
-								"rs_api_plugin_adapter",        // operation name
-                                clear_bytes_buf,  // output clear fcn
+                                "PortalOprOut_PI", 0, // out PI / bs flag
+                                plugin_op,        // operation
+								"rs_api_plugin_adapter", // operation name
+                                clear_portal,  // output clear fcn
                                 (funcPtr)CALL_API_PLUGIN_ADAPTER
                               };
         // =-=-=-=-=-=-=-
@@ -186,8 +185,8 @@ extern "C" {
         api->in_pack_key   = "BytesBuf_PI";
         api->in_pack_value = BytesBuf_PI;
 
-        api->out_pack_key   = "BytesBuf_PI";
-        api->out_pack_value = BytesBuf_PI;
+        api->out_pack_key   = "PortalOprOut_PI";
+        api->out_pack_value = PortalOprOut_PI;
 
         return api;
 
