@@ -25,132 +25,190 @@
 typedef irods::api_plugin_adapter_test_request api_req_t;
 
 extern "C" {
-void api_adapter_test_executor_server_to_server(
-    irods::api_endpoint*  _endpoint ) {
-    return;
-} // api_adapter_test_executor
-
-void api_adapter_test_executor_server(
-    irods::api_endpoint*  _endpoint ) {
-    typedef irods::message_broker::data_type data_t;
-
-    // =-=-=-=-=-=-=-
-    //TODO: parameterize
-    irods::message_broker bro("ZMQ_REP");
-
-    const int start_port = irods::get_server_property<const int>(
-                               irods::CFG_SERVER_PORT_RANGE_START_KW);
-    const int  end_port = irods::get_server_property<const int>(
-                              irods::CFG_SERVER_PORT_RANGE_END_KW);
-    int port = bro.bind_to_port_in_range(start_port, end_port);
-    _endpoint->port(port);
-
-    // =-=-=-=-=-=-=-
-    // fetch the payload to extract the response string
-    api_req_t api_req;
-    try {
-        _endpoint->payload<api_req_t>(api_req);
-    }
-    catch(const boost::bad_any_cast& _e) {
-        // end of protocol
-        irods::log(LOG_ERROR, _e.what());
-        _endpoint->done(true);
-        //TODO: notify client of failure
+    void api_adapter_test_executor_server_to_server(
+        irods::api_endpoint*  _endpoint ) {
         return;
-    }
+    } // api_adapter_test_executor
 
-    data_t req_data;
-    bro.recieve(req_data);
+    void api_adapter_test_executor_server(
+        irods::api_endpoint*  _endpoint ) {
+        typedef irods::message_broker::data_type data_t;
 
-    std::string req_string;
-    req_string.assign(req_data.begin(), req_data.end());
-    std::cout << "SERVER received request from client [" << req_string << "]" << std::endl;
+        // =-=-=-=-=-=-=-
+        //TODO: parameterize
+        irods::message_broker bro("ZMQ_REP");
 
-    // "do stuff"
-    std::cout << "SERVER doing some work" << std::endl;
-    std::cout << "SERVER doing some more work" << std::endl;
+        const int start_port = irods::get_server_property<const int>(
+                                   irods::CFG_SERVER_PORT_RANGE_START_KW);
+        const int  end_port = irods::get_server_property<const int>(
+                                  irods::CFG_SERVER_PORT_RANGE_END_KW);
+        int port = bro.bind_to_port_in_range(start_port, end_port);
+        _endpoint->port(port);
 
-    // =-=-=-=-=-=-=-
-    // copy generic test response string to a data buffer
-    std::string resp_string("this is a test [");
-    resp_string += api_req.response_string;
-    resp_string += "], this is only a test";
+        // =-=-=-=-=-=-=-
+        // fetch the payload to extract the response string
+        api_req_t api_req;
+        try {
+            _endpoint->payload<api_req_t>(api_req);
+        }
+        catch(const boost::bad_any_cast& _e) {
+            // end of protocol
+            irods::log(LOG_ERROR, _e.what());
+            _endpoint->done(true);
+            //TODO: add to rError for client
+            return;
+        }
 
-    data_t resp_data;
-    resp_data.assign(resp_string.begin(), resp_string.end()); 
-    std::cout << "SERVER sending response [" << resp_string << "]" << std::endl;
-    
-    // =-=-=-=-=-=-=-
-    // set the message for sending, then block 
-    bro.send( resp_data );
-    
-    // end of protocol
-    _endpoint->done(true);
+        while(true) {
+            data_t req_data;
+            bro.recieve(req_data);
 
-    return;
+            std::string req_string;
+            req_string.assign(req_data.begin(), req_data.end());
 
-} // api_adapter_test_executor
+            if("quit" == req_string) {
+                // respond to the client side
+                char ack[] = {"ACK"};
+                data_t resp_data;
+                resp_data.assign(ack, ack+3);
+                bro.send( resp_data );
+                break;
+            }
 
-void api_adapter_test_executor_client(
-    irods::api_endpoint*  _endpoint ) {
-    typedef irods::message_broker::data_type data_t;
-    // =-=-=-=-=-=-=-
-    //TODO: parameterize
-    irods::message_broker bro("ZMQ_REQ");
+            std::cout << "SERVER received request from client [" << req_string << "]" << std::endl;
 
-    int port = _endpoint->port();
-    std::stringstream conn_sstr;
-    conn_sstr << "tcp://localhost:";
-    conn_sstr << port;
-    bro.connect(conn_sstr.str());
+            // "do stuff"
+            std::cout << "SERVER doing some work" << std::endl;
+            std::cout << "SERVER doing some more work" << std::endl;
 
-    // =-=-=-=-=-=-=-
-    // fetch the payload to extract the request string
-    api_req_t api_req;
-    try {
-        _endpoint->payload<api_req_t>(api_req);
-    }
-    catch(const boost::bad_any_cast& _e) {
+            // =-=-=-=-=-=-=-
+            // copy generic test response string to a data buffer
+            std::string resp_string("this is a test [");
+            resp_string += api_req.response_string;
+            resp_string += "], this is only a test";
+
+            data_t resp_data;
+            resp_data.assign(resp_string.begin(), resp_string.end()); 
+            std::cout << "SERVER sending response [" << resp_string << "]" << std::endl;
+            
+            // =-=-=-=-=-=-=-
+            // set the message for sending, then block 
+            bro.send( resp_data );
+        } // while true
+
+        std::cout << "api_adapter_test_executor - done" << std::endl;
         // end of protocol
-        std::cerr << _e.what() << std::endl;
         _endpoint->done(true);
-        //TODO: notify server of failure
+
         return;
-    }
 
-    // =-=-=-=-=-=-=-
-    // copy generic test request string to a data buffer
-    std::string req_string("this is a test [");
-    req_string += api_req.request_string;
-    req_string += "], this is only a test.";
+    } // api_adapter_test_executor
 
-    data_t req_data;
-    req_data.assign(req_string.begin(), req_string.end()); 
+    void api_adapter_test_executor_client(
+        irods::api_endpoint*  _endpoint ) {
 
-    // =-=-=-=-=-=-=-
-    // set the message for sending, then block 
-    std::cout << "CLIENT sending: [" << req_string << "]" << std::endl;
-    bro.send( req_data );
-    
-    // "do stuff"
-    std::cout << "CLIENT doing some work" << std::endl;
-    std::cout << "CLIENT doing some work" << std::endl;
+        zmq::socket_t cmd_skt(*_endpoint->ctrl_ctx(), ZMQ_REP);
+        cmd_skt.connect("inproc://client_comms");
 
-    data_t resp_data;
-    bro.recieve(resp_data);
-    
-    std::cout << "CLIENT doing some more work" << std::endl;
+        try {
+            typedef irods::message_broker::data_type data_t;
+            irods::message_broker bro("ZMQ_REQ");
 
-    std::string resp_string;
-    resp_string.assign(resp_data.begin(), resp_data.end());
-    std::cout << "CLIENT RECEIVED response: [" << resp_string << "]" << std::endl;
-   
-    // end of protocol
-    _endpoint->done(true);
+            int port = _endpoint->port();
+            std::stringstream conn_sstr;
+            conn_sstr << "tcp://localhost:";
+            conn_sstr << port;
+            bro.connect(conn_sstr.str());
 
-    return;
+            // =-=-=-=-=-=-=-
+            // fetch the payload to extract the request string
+            api_req_t api_req;
+            try {
+                _endpoint->payload<api_req_t>(api_req);
+            }
+            catch(const boost::bad_any_cast& _e) {
+                // end of protocol
+                std::cerr << _e.what() << std::endl;
+                _endpoint->done(true);
+                //TODO: notify server of failure
+                return;
+            }
 
-} // api_adapter_test_executor
+            while(true) {
+                zmq::message_t rcv_msg;
+                bool ret = cmd_skt.recv( &rcv_msg, ZMQ_DONTWAIT);
+                if( ret || rcv_msg.size() > 0) {
+     
+                    std::string in_str;
+                    in_str.assign(
+                        (char*)rcv_msg.data(),
+                        ((char*)rcv_msg.data())+rcv_msg.size());
+
+                    std::cout << "CMD RECV - [" << in_str << "]" << std::endl; 
+                    // =-=-=-=-=-=--=
+                    // process events from the client 
+                    if("quit" == in_str) {
+                        std::cout << "CMD sending quit" << std::endl;
+                        data_t req_data;
+                        req_data.assign(in_str.begin(), in_str.end()); 
+                        bro.send( req_data );
+                        
+                        data_t resp_data;
+                        bro.recieve(resp_data);
+                                  
+                        zmq::message_t snd_msg(3);
+                        memcpy(snd_msg.data(), "ACK", 3);
+                        cmd_skt.send(snd_msg);
+
+                        break;
+                    }
+
+                    zmq::message_t snd_msg(3);
+                    memcpy(snd_msg.data(), "ACK", 3);
+                    cmd_skt.send(snd_msg);
+
+                } // if event
+
+                // =-=-=-=-=-=-=-
+                // copy generic test request string to a data buffer
+                std::string req_string("this is a test [");
+                req_string += api_req.request_string;
+                req_string += "], this is only a test.";
+
+                data_t req_data;
+                req_data.assign(req_string.begin(), req_string.end()); 
+
+                // =-=-=-=-=-=-=-
+                // set the message for sending, then block 
+                std::cout << "CLIENT sending: [" << req_string << "]" << std::endl;
+                bro.send( req_data );
+                
+                // "do stuff"
+                std::cout << "CLIENT doing some work" << std::endl;
+                std::cout << "CLIENT doing some work" << std::endl;
+
+                data_t resp_data;
+                bro.recieve(resp_data);
+                
+                std::cout << "CLIENT doing some more work" << std::endl;
+
+                std::string resp_string;
+                resp_string.assign(resp_data.begin(), resp_data.end());
+                std::cout << "CLIENT RECEIVED response: [" << resp_string << "]" << std::endl;
+
+            } // while
+
+            // end of protocol
+            _endpoint->done(true);
+        }
+        catch(const zmq::error_t& _e) {
+            std::cerr << _e.what() << std::endl;
+        }
+
+        return;
+
+    } // api_adapter_test_executor
+
 }; // extern C
 
 class api_adapter_test_api_endpoint : public irods::api_endpoint {
@@ -174,21 +232,20 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
         // =-=-=-=-=-=-=-
         // used for client-side initialization
         void init_and_serialize_payload(
-            int                   _argc,
-            char*                 _argv[],
-            std::vector<uint8_t>& _out) {
-            for( auto i=0; i<_argc; ++i) {
-                std::cout << "arg["<<i<<"] = " << _argv[i] << std::endl;
+            const std::vector<std::string>& _args,
+            std::vector<uint8_t>&           _out ) {
+            for( auto arg : _args ) {
+                std::cout << "arg["<< arg << "]" << std::endl;
             }
 
             api_req_t req;
             req.request_string = "DEFAULT_REQUEST";
             req.response_string = "DEFAULT_RESPONSE";
-            if(_argc >= 3 ) {
-                req.request_string  = _argv[2];
+            if(_args.size() >= 3 ) {
+                req.request_string  = _args[2];
             }
-            if(_argc >= 4 ) {
-                req.response_string = _argv[3];
+            if(_args.size() >= 4 ) {
+                req.response_string = _args[3];
             }
 
             auto out = avro::memoryOutputStream();

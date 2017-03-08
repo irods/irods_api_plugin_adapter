@@ -8,6 +8,7 @@ target_link_libraries(
   irods_client
   irods_common
   irods_plugin_dependencies
+  irods_api_endpoint
   ${IRODS_EXTERNALS_FULLPATH_AVRO}/lib/libavrocpp.so
   ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_filesystem.so
   ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_program_options.so

@@ -14,6 +14,7 @@
 
 #include "irods_api_envelope.hpp"
 #include "irods_api_endpoint.hpp"
+#include "irods_message_broker.hpp"
 #include "irods_api_plugin_adapter_test_request.hpp"
 
 #include "zmq.hpp"
@@ -22,68 +23,48 @@
 #include <iostream>
 #include <thread>
 
-irods::error create_command_object(
-    const std::string&    _ep_name,
-    irods::api_endpoint*& _endpoint ) {
+int client_interaction( zmq::context_t& _zmq_ctx) {
+    zmq::socket_t zmq_skt(_zmq_ctx, ZMQ_REQ);
+    zmq_skt.bind("inproc://client_comms");
 
-    irods::error ret = irods::load_plugin<irods::api_endpoint>(
-                           _endpoint,
-                           _ep_name + "_client",
-                           "api_v5",
-                           "version_5_endpoint",
-                           irods::API_EP_CLIENT);
-    if(!_endpoint || !ret.ok()) {
-        return PASS(ret);
-    }
-
-    return SUCCESS();
-}
-
-void client_thread_executor( irods::api_endpoint* _ep_ptr ) {
     try {
-        // =-=-=-=-=-=-=-
-        // start the client api thread
-        try {
-            _ep_ptr->invoke();
-        }
-        catch( const irods::exception& _e ) {
-            irods::log(_e);
-            throw;
-        }
+        while(true) {
+            std::string in_str;
+            std::cin >> in_str;
+
+            zmq::message_t snd_msg(in_str.size());
+            memcpy(snd_msg.data(), in_str.data(), in_str.size());
+            zmq_skt.send(snd_msg);
+
+            zmq::message_t rcv_msg;
+            while(true) {
+                zmq_skt.recv( &rcv_msg );
+                if(rcv_msg.size()<= 0) {
+                //TODO: need backoff
+                    continue;
+                }
+                break;
+            }
+
+            std::cout << (char*)rcv_msg.data() << std::endl;
+
+            if("quit" == in_str) {
+                std::cout << "Exiting." << std::endl;
+                break;
+            }
+        } // while
     }
-    catch ( const zmq::error_t& _e) {
+    catch(const zmq::error_t& _e) {
         std::cerr << _e.what() << std::endl;
     }
 
-} // client_thread_executor
-
+    return 0;
+}
 
 int main( int _argc, char* _argv[] ) {
     if(1 >= _argc) {
         std::cerr << "iapi_adapter_test api_v5_endpoint [...]" << std::endl;
         return 1;
-    }
-
-    // =-=-=-=-=-=-=-
-    // create the envelope for the given endpoint
-    irods::api_envelope envelope;
-    envelope.endpoint = _argv[1];
-    envelope.length = 0;
-    //TODO: parameterize
-    envelope.control_channel_port = 1246;
-    envelope.payload.clear();
-
-    // =-=-=-=-=-=-=-
-    // initialize the client-side of the endpoint
-    irods::api_endpoint* ep_ptr = nullptr;
-    irods::error ret = create_command_object(
-                           envelope.endpoint,
-                           ep_ptr);
-    if(!ret.ok()) {
-        std::cout << "invalid endpoint: "
-                  << envelope.endpoint
-                  << std::endl;
-        return ret.code();
     }
 
     signal( SIGPIPE, SIG_IGN );
@@ -92,20 +73,7 @@ int main( int _argc, char* _argv[] ) {
     int status = getRodsEnv( &myEnv );
     if ( status < 0 ) {
         rodsLogError( LOG_ERROR, status, "main: getRodsEnv error. " );
-        exit( 1 );
-    }
-
-    rErrMsg_t errMsg;
-    rcComm_t *conn;
-    conn = rcConnect(
-               myEnv.rodsHost,
-               myEnv.rodsPort,
-               myEnv.rodsUserName,
-               myEnv.rodsZone,
-               0, &errMsg );
-
-    if ( conn == NULL ) {
-        exit( 2 );
+        return 2;
     }
 
     // =-=-=-=-=-=-=-
@@ -114,61 +82,28 @@ int main( int _argc, char* _argv[] ) {
     irods::api_entry_table& api_tbl = irods::get_client_api_table();
     init_api_table( api_tbl, pk_tbl );
 
-    if ( strcmp( myEnv.rodsUserName, PUBLIC_USER_NAME ) != 0 ) {
-        status = clientLogin( conn );
-        if ( status != 0 ) {
-            rcDisconnect( conn );
-            exit( 7 );
-        }
+    std::vector<std::string> arg_vec;
+    for(auto i = 0; i <_argc; ++i) {
+        arg_vec.push_back(_argv[i]);
     }
-
-    // =-=-=-=-=-=-=-
-    // initialize the client-side of the endpoint
+    
     try {
-        ep_ptr->initialize(_argc, _argv, envelope.payload);
+        zmq::context_t zmq_ctx(1);
+        irods::api_v5_call_client(
+            myEnv.rodsHost,
+            myEnv.rodsPort,
+            myEnv.rodsZone,
+            myEnv.rodsUserName,
+            zmq_ctx,
+            client_interaction,
+            _argv[1],
+            arg_vec);
     }
     catch(const irods::exception& _e) {
-        std::cerr << "failed to initialize endpoint " 
-                  << envelope.endpoint 
-                  << std::endl;
-        return 1;
+        std::cerr << _e.what() << std::endl;
+        return _e.code();
     }
 
-    auto out = avro::memoryOutputStream();
-    auto enc = avro::binaryEncoder();
-    enc->init( *out );
-    avro::encode( *enc, envelope );
-    auto data = avro::snapshot( *out );
-
-    bytesBuf_t inp;
-    memset(&inp, 0, sizeof(bytesBuf_t));
-    inp.len = data->size();
-    inp.buf = data->data();
-
-    void *tmp_out = NULL;
-    status = procApiRequest( conn, 5000, &inp, NULL,
-                             &tmp_out, NULL );
-    if ( status < 0 ) {
-        printErrorStack( conn->rError );
-    }
-    else {
-        if ( tmp_out != NULL ) {
-            portalOprOut_t* portal = static_cast<portalOprOut_t*>( tmp_out );
-            ep_ptr->port(portal->portList.portNum);
-            std::thread client_thread(
-                client_thread_executor,
-                ep_ptr);
-            client_thread.join();
-        }
-        else {
-            printf( "ERROR: the 'out' variable is null\n" );
-        }
-    }
-
-    rcOprComplete(conn, 0);
-
-    rcDisconnect( conn );
-
-    return status;
+    return 0;
 }
 

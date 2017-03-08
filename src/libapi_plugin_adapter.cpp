@@ -64,6 +64,7 @@ void clear_bytes_buf(void* _in) {
 std::unique_ptr<irods::api_endpoint> create_command_object(
     const std::string& _ep_name ) {
 
+    // TODO: consider server-to-server redirection
     irods::api_endpoint* ep_ptr = nullptr;
     irods::error ret = irods::load_plugin<irods::api_endpoint>(
                            ep_ptr,
@@ -104,12 +105,17 @@ int rs_api_plugin_adapter(
             envelope.endpoint.c_str() );
 
         // =-=-=-=-=-=-=-
+        // TODO: wire up dynPEP rule invocation here for PRE
+        // =-=-=-=-=-=-=-
+        
+        // =-=-=-=-=-=-=-
         // load the api_v5 plugin and get the handle
         std::unique_ptr<irods::api_endpoint> ep_ptr = create_command_object(
                                                           envelope.endpoint);
         // =-=-=-=-=-=-=-
         // initialize the API plugin with the payload
-        ep_ptr->initialize(0, nullptr, envelope.payload);
+        zmq::context_t zmq_ctx(1); 
+        ep_ptr->initialize(_comm, &zmq_ctx, std::vector<std::string>(), envelope.payload);
 
         // =-=-=-=-=-=-=-
         // start the api thread
@@ -137,6 +143,12 @@ int rs_api_plugin_adapter(
                 __FUNCTION__,
                 ret);
         }
+        
+        ep_ptr->wait();
+
+        // =-=-=-=-=-=-=-
+        // TODO: wire up dynPEP rule invocation here for POST?
+        // =-=-=-=-=-=-=-
     }
     catch( const irods::exception& _e ) {
         //TODO: add irods exception to _out?

@@ -41,6 +41,9 @@ include_directories(${IRODS_EXTERNALS_FULLPATH_CLANG}/include/c++/v1)
 
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-z,defs")
 
+add_compile_options(-Wno-unused-parameter) # Until fix of irods_re_plugin.hpp
+add_compile_options(-Wno-unneeded-internal-declaration) # Until fix of https://github.com/irods/irods/issues/3396
+
 include(api_plugin.cmake)
 include(api_v5_plugin.cmake)
 include(icommand.cmake)

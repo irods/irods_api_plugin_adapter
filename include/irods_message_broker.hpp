@@ -16,7 +16,7 @@ namespace irods {
     public:
         typedef std::vector<uint8_t> data_type;
 
-        message_broker(const std::string& _ctx) : zmq_ctx_(1) {
+        message_broker(const std::string& _ctx) : ctx_ptr_(std::make_unique<zmq::context_t>(1)) {
             try {
                 create_socket(_ctx);
             }
@@ -112,7 +112,7 @@ namespace irods {
             try {
                 if("ZMQ_REQ" == _ctx ) {
                     skt_ptr_ = std::unique_ptr<zmq::socket_t>(
-                            new zmq::socket_t(zmq_ctx_, ZMQ_REQ));
+                            new zmq::socket_t(*ctx_ptr_, ZMQ_REQ));
                 }
                 else {
                     int time_out = 0;
@@ -126,7 +126,7 @@ namespace irods {
                     }
 
                     skt_ptr_ = std::unique_ptr<zmq::socket_t>(
-                            new zmq::socket_t(zmq_ctx_, ZMQ_REP));
+                            new zmq::socket_t(*ctx_ptr_, ZMQ_REP));
                     skt_ptr_->setsockopt( ZMQ_RCVTIMEO, &time_out, sizeof( time_out ) );
                     skt_ptr_->setsockopt( ZMQ_SNDTIMEO, &time_out, sizeof( time_out ) );
                     skt_ptr_->setsockopt( ZMQ_LINGER, 0 );
@@ -137,8 +137,8 @@ namespace irods {
             }
         }
 
-        zmq::context_t                 zmq_ctx_;
-        std::unique_ptr<zmq::socket_t> skt_ptr_;
+        std::unique_ptr<zmq::context_t> ctx_ptr_;
+        std::unique_ptr<zmq::socket_t>  skt_ptr_;
 
     }; // class message_broker
 
