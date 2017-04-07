@@ -61,7 +61,7 @@ extern "C" {
 
         while(true) {
             data_t req_data;
-            bro.recieve(req_data);
+            bro.receive(req_data);
 
             std::string req_string;
             req_string.assign(req_data.begin(), req_data.end());
@@ -154,7 +154,7 @@ extern "C" {
                         bro.send( req_data );
                         
                         data_t resp_data;
-                        bro.recieve(resp_data);
+                        bro.receive(resp_data);
                                   
                         zmq::message_t snd_msg(3);
                         memcpy(snd_msg.data(), "ACK", 3);
@@ -180,21 +180,21 @@ extern "C" {
 
                 // =-=-=-=-=-=-=-
                 // set the message for sending, then block 
-                std::cout << "CLIENT sending: [" << req_string << "]" << std::endl;
+                //std::cout << "CLIENT sending: [" << req_string << "]" << std::endl;
                 bro.send( req_data );
                 
                 // "do stuff"
-                std::cout << "CLIENT doing some work" << std::endl;
-                std::cout << "CLIENT doing some work" << std::endl;
+                //std::cout << "CLIENT doing some work" << std::endl;
+                //std::cout << "CLIENT doing some work" << std::endl;
 
                 data_t resp_data;
-                bro.recieve(resp_data);
+                bro.receive(resp_data);
                 
-                std::cout << "CLIENT doing some more work" << std::endl;
+                //std::cout << "CLIENT doing some more work" << std::endl;
 
                 std::string resp_string;
                 resp_string.assign(resp_data.begin(), resp_data.end());
-                std::cout << "CLIENT RECEIVED response: [" << resp_string << "]" << std::endl;
+                //std::cout << "CLIENT RECEIVED response: [" << resp_string << "]" << std::endl;
 
             } // while
 

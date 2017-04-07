@@ -16,7 +16,7 @@
 #include <thread>
 
 namespace irods {
-    typedef std::function<int(zmq::context_t&)> client_fcn_t;
+    typedef std::function<int(zmq::context_t&, const std::string&)> client_fcn_t;
     static const std::string API_EP_CLIENT("api_endpoint_client");
     static const std::string API_EP_SERVER("api_endpoint_server");
     static const std::string API_EP_SVR_TO_SVR("api_endpoint_svr_to_svr");
@@ -95,6 +95,16 @@ namespace irods {
                 THROW(SYS_INVALID_INPUT_PARAM, _e.what());
             }
         }
+
+        void initialize(
+            boost::any            _comm,
+            zmq::context_t*       _zmq_ctx,
+            std::vector<uint8_t>& _payload ) {
+            comm_     = _comm;
+            ctrl_ctx_ = _zmq_ctx;
+            payload_  = _payload;
+
+        } // initialize
 
         void initialize(
             boost::any                      _comm,
@@ -177,6 +187,20 @@ namespace irods {
         std::condition_variable      cond_;
         std::unique_ptr<std::thread> thread_;
     }; // class api_endpoint
+
+    void api_v5_to_v5_call_client(
+            rcComm_t*,
+            const std::string&,
+            irods::api_endpoint*,
+            zmq::context_t*,
+            std::vector<uint8_t>&);
+
+    void api_v5_to_v5_call_server(
+            rsComm_t*,
+            const std::string&,
+            irods::api_endpoint*,
+            zmq::context_t*,
+            std::vector<uint8_t>&);
 
 }; // namespace irods
 

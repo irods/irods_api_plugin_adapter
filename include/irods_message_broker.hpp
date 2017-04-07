@@ -46,7 +46,7 @@ namespace irods {
             }
         }
 
-        void recieve(data_type& _data) {
+        void receive(data_type& _data) {
             try {
                 zmq::message_t msg;
                 while(true) {

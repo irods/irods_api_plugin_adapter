@@ -23,12 +23,16 @@
 #include <iostream>
 #include <thread>
 
-int client_interaction( zmq::context_t& _zmq_ctx) {
+int client_interaction(
+    zmq::context_t&    _zmq_ctx,
+    const std::string& _ep_name) {
+
     zmq::socket_t zmq_skt(_zmq_ctx, ZMQ_REQ);
     zmq_skt.bind("inproc://client_comms");
 
     try {
         while(true) {
+            std::cout << _ep_name << "> ";
             std::string in_str;
             std::cin >> in_str;
 
