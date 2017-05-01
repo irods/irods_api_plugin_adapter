@@ -5,6 +5,8 @@
 #define IRODS_MESSAGE_QUEUE_HPP
 
 #include <vector>
+#include <iostream>
+
 #include "zmq.hpp"
 
 #include "irods_server_properties.hpp"
@@ -16,7 +18,18 @@ namespace irods {
     public:
         typedef std::vector<uint8_t> data_type;
 
-        message_broker(const std::string& _ctx) : ctx_ptr_(std::make_unique<zmq::context_t>(1)) {
+        message_broker(const std::string& _type, zmq::context_t* _zmq_ctx_ptr) :
+            ctx_ptr_(_zmq_ctx_ptr), do_not_delete_ctx_ptr_(true) {
+            try {
+                create_socket(_type);
+            }
+            catch ( const zmq::error_t& _e) {
+                THROW(INVALID_OPERATION, _e.what());
+            }
+        }
+
+        message_broker(const std::string& _ctx) : 
+            ctx_ptr_(new zmq::context_t(1)), do_not_delete_ctx_ptr_(false) {
             try {
                 create_socket(_ctx);
             }
@@ -27,6 +40,9 @@ namespace irods {
 
         ~message_broker() {
             skt_ptr_->close();
+            if(!do_not_delete_ctx_ptr_) {
+                delete ctx_ptr_;
+            }
         }
 
         void send(const data_type& _data) {
@@ -46,20 +62,51 @@ namespace irods {
             }
         }
 
-        void receive(data_type& _data) {
+        void send(zmq::message_t& _data) {
+            try {
+                while(!skt_ptr_->send( _data ) ) {
+                    //TODO: need backoff
+                        continue;
+                }
+            }
+            catch ( const zmq::error_t& _e) {
+                std::cerr << _e.what() << std::endl;
+            }
+        }
+
+        void receive(data_type& _data, const int flags=0, const bool debug=false) {
             try {
                 zmq::message_t msg;
                 while(true) {
-                    skt_ptr_->recv( &msg );
-                    if(msg.size()<= 0) {
-                    //TODO: need backoff
+                    int ret = skt_ptr_->recv( &msg, flags );
+                    if(-1 == ret && ZMQ_DONTWAIT == flags) {
+                        if(debug) {
+                            std::cout << "dontwait failed in recieve" << std::endl; fflush(stdout);
+                        }
+                        if(zmq_errno() == EAGAIN) {
+                            if(debug) {
+                               std::cout << "dontwait with EAGAIN" << std::endl; fflush(stdout);
+                            }
+                            break;
+                        }
+                    }
+                    else if(ret <= 0 && ZMQ_DONTWAIT != flags) {
+                        int eno = zmq_errno();
+                        std::cout << "read error :: ret - " << ret << "    errno - " << eno << std::endl;
+                        if(EAGAIN == ret || eno == EAGAIN) {
+                            THROW(SYS_SOCK_READ_ERR, "time out in recieve");
+                        }
+
+                        //TODO: need backoff
                         continue;
                     }
                     break;
                 }
-                _data.resize(msg.size());
-                std::memcpy(_data.data(), msg.data(), msg.size());
-
+            
+                if(msg.size() > 0) {
+                    _data.resize(msg.size());
+                    std::memcpy(_data.data(), msg.data(), msg.size());
+                }
             }
             catch ( const zmq::error_t& _e) {
                 std::cerr << _e.what() << std::endl;
@@ -69,6 +116,15 @@ namespace irods {
         void connect(const std::string& _conn) {
             try {
                 skt_ptr_->connect(_conn);
+            }
+            catch(const zmq::error_t& _e) {
+                THROW(SYS_SOCK_CONNECT_ERR, _e.what());
+            }
+        }
+
+        void bind(const std::string& _conn) {
+            try {
+                skt_ptr_->bind(_conn);
             }
             catch(const zmq::error_t& _e) {
                 THROW(SYS_SOCK_CONNECT_ERR, _e.what());
@@ -110,39 +166,53 @@ namespace irods {
     private:
         void create_socket(const std::string _ctx) {
             try {
+                int time_out = 1500;
+#if 0
+                try {
+                    // TODO: need a new parameter
+                    time_out = irods::get_server_property<const int>(
+                            irods::CFG_SERVER_CONTROL_PLANE_TIMEOUT);
+                } catch ( const irods::exception& _e ) {
+                    irods::log(_e);
+                    return;
+                }
+#endif
                 if("ZMQ_REQ" == _ctx ) {
                     skt_ptr_ = std::unique_ptr<zmq::socket_t>(
-                            new zmq::socket_t(*ctx_ptr_, ZMQ_REQ));
+                                   std::make_unique<zmq::socket_t>(
+                                       *ctx_ptr_, ZMQ_REQ));
                 }
                 else {
-                    int time_out = 0;
-                    try {
-                        // TODO: need a new parameter
-                        time_out = irods::get_server_property<const int>(
-                                irods::CFG_SERVER_CONTROL_PLANE_TIMEOUT);
-                    } catch ( const irods::exception& _e ) {
-                        irods::log(_e);
-                        return;
-                    }
-
                     skt_ptr_ = std::unique_ptr<zmq::socket_t>(
-                            new zmq::socket_t(*ctx_ptr_, ZMQ_REP));
-                    skt_ptr_->setsockopt( ZMQ_RCVTIMEO, &time_out, sizeof( time_out ) );
-                    skt_ptr_->setsockopt( ZMQ_SNDTIMEO, &time_out, sizeof( time_out ) );
-                    skt_ptr_->setsockopt( ZMQ_LINGER, 0 );
+                                   std::make_unique<zmq::socket_t>(
+                                       *ctx_ptr_, ZMQ_REP));
                 }
+
+                skt_ptr_->setsockopt( ZMQ_RCVTIMEO, &time_out, sizeof( time_out ) );
+                skt_ptr_->setsockopt( ZMQ_SNDTIMEO, &time_out, sizeof( time_out ) );
+                skt_ptr_->setsockopt( ZMQ_LINGER, 0 );
             }
             catch ( const zmq::error_t& _e) {
                 THROW(INVALID_OPERATION, _e.what());
             }
         }
 
-        std::unique_ptr<zmq::context_t> ctx_ptr_;
-        std::unique_ptr<zmq::socket_t>  skt_ptr_;
+        zmq::context_t* ctx_ptr_;
+        bool do_not_delete_ctx_ptr_;
+        std::unique_ptr<zmq::socket_t> skt_ptr_;
 
     }; // class message_broker
 
 }; // namespace irods
+
+std::ostream& operator<<(
+    std::ostream& _os,
+    const irods::message_broker::data_type& _dt) {
+    std::string msg;
+    msg.assign(_dt.begin(), _dt.end());
+        _os << msg;
+        return _os;  
+} // operator<<
 
 
 #endif // IRODS_MESSAGE_QUEUE_HPP

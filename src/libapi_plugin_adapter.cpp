@@ -128,6 +128,7 @@ int rs_api_plugin_adapter(
         memset(*_portal_out, 0, sizeof(portalOprOut_t));
         (*_portal_out)->portList.portNum = ep_ptr->port();
         (*_portal_out)->portList.cookie = ( int )( irods::getRandom<unsigned int>() >> 1 );
+        // TODO: FIXME
         strcpy( (*_portal_out)->portList.hostAddr, "avogadro.renci.org");
 
         int ret = sendAndRecvBranchMsg(

@@ -9,6 +9,7 @@
 #include "avro/Specific.hh"
 
 #include "irods_message_broker.hpp"
+#include "irods_load_plugin.hpp"
 
 #include "boost/any.hpp"
 #include "boost/shared_ptr.hpp"
@@ -96,10 +97,11 @@ namespace irods {
             }
         }
 
+        template<class T>
         void initialize(
-            boost::any            _comm,
-            zmq::context_t*       _zmq_ctx,
-            std::vector<uint8_t>& _payload ) {
+            boost::any      _comm,
+            zmq::context_t* _zmq_ctx,
+            const T&        _payload ) {
             comm_     = _comm;
             ctrl_ctx_ = _zmq_ctx;
             payload_  = _payload;
@@ -188,19 +190,74 @@ namespace irods {
         std::unique_ptr<std::thread> thread_;
     }; // class api_endpoint
 
+    template<class T>
     void api_v5_to_v5_call_client(
-            rcComm_t*,
-            const std::string&,
-            irods::api_endpoint*,
-            zmq::context_t*,
-            std::vector<uint8_t>&);
+        rcComm_t*             _conn,
+        const std::string&    _endpoint,
+        irods::api_endpoint*& _ep_ptr,
+        zmq::context_t*       _zmq_ctx,
+        const T&              _payload ) {
+        try {
+            error ret = irods::load_plugin<api_endpoint>(
+                            _ep_ptr,
+                            _endpoint + "_client",
+                            "api_v5",
+                            "version_5_endpoint",
+                            API_EP_CLIENT);
+            if(!ret.ok()) {
+                THROW(ret.code(), ret.result());
+            }
 
+            // =-=-=-=-=-=-=-
+            // initialize the client-side of the endpoint
+            try {
+                _ep_ptr->initialize<T>(_conn, _zmq_ctx, _payload);
+            }
+            catch(const irods::exception& _e) {
+                std::string msg = "failed to initialize with endpoint: ";
+                msg += _endpoint;
+                THROW(SYS_INVALID_INPUT_PARAM, msg);
+            }
+
+            // portalOprOut_t* portal = static_cast<portalOprOut_t*>( tmp_out );
+            // _ep_ptr->port(portal->portList.portNum);
+            _ep_ptr->invoke();
+        }
+        catch(const irods::exception&) {
+            throw;
+        }
+
+    } // api_v5_to_v5_call_client
+
+    template<class T>
     void api_v5_to_v5_call_server(
-            rsComm_t*,
-            const std::string&,
-            irods::api_endpoint*,
-            zmq::context_t*,
-            std::vector<uint8_t>&);
+            rsComm_t*             _conn,
+            const std::string&    _endpoint,
+            irods::api_endpoint*& _ep_ptr,
+            zmq::context_t*       _zmq_ctx,
+            const T&              _payload ) {
+        irods::error ret = irods::load_plugin<irods::api_endpoint>(
+                               _ep_ptr,
+                               _endpoint + "_server",
+                               "api_v5",
+                               "version_5_endpoint",
+                               irods::API_EP_SERVER);
+        if(!_ep_ptr || !ret.ok()) {
+            THROW(ret.code(), ret.result());
+        }
+        
+        try {
+            _ep_ptr->initialize<T>(_conn, _zmq_ctx, _payload);
+        }
+        catch(const irods::exception& _e) {
+            std::string msg = "failed to initialize with endpoint: ";
+            msg += _endpoint;
+            THROW(SYS_INVALID_INPUT_PARAM, msg);
+        }
+
+        _ep_ptr->invoke();
+
+    } // api_v5_to_v5_call_server
 
 }; // namespace irods
 

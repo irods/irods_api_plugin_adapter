@@ -32,9 +32,9 @@ int client_interaction(
 
     try {
         while(true) {
-            std::cout << _ep_name << "> ";
-            std::string in_str;
-            std::cin >> in_str;
+            std::string in_str("quit");
+            // TODO: set up proper console - std::cout << _ep_name << "> ";
+            // TODO: set up proper console - std::cin >> in_str;
 
             zmq::message_t snd_msg(in_str.size());
             memcpy(snd_msg.data(), in_str.data(), in_str.size());
