@@ -62,7 +62,8 @@ void clear_bytes_buf(void* _in) {
 #ifdef RODS_SERVER
 //TODO: throw irods::exception
 std::unique_ptr<irods::api_endpoint> create_command_object(
-    const std::string& _ep_name ) {
+    const std::string& _ep_name,
+    const std::string& _ep_type) {
 
     // TODO: consider server-to-server redirection
     irods::api_endpoint* ep_ptr = nullptr;
@@ -70,14 +71,17 @@ std::unique_ptr<irods::api_endpoint> create_command_object(
                            ep_ptr,
                            _ep_name + "_server",
                            "api_v5",
-                           "version_5_endpoint",
-                           irods::API_EP_SERVER);
+                           "version_5_endpoint",                           
+                           _ep_type);//XXXX - irods::API_EP_SERVER);
     if(!ep_ptr || !ret.ok()) {
         THROW(ret.code(), ret.result());
     }
 
     return std::unique_ptr<irods::api_endpoint>(ep_ptr);
 }
+
+
+
 
 // =-=-=-=-=-=-=-
 // api function to be referenced by the entry
@@ -111,7 +115,8 @@ int rs_api_plugin_adapter(
         // =-=-=-=-=-=-=-
         // load the api_v5 plugin and get the handle
         std::unique_ptr<irods::api_endpoint> ep_ptr = create_command_object(
-                                                          envelope.endpoint);
+                                                          envelope.endpoint,
+                                                          envelope.connection_type);
         // =-=-=-=-=-=-=-
         // initialize the API plugin with the payload
         zmq::context_t zmq_ctx(1); 

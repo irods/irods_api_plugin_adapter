@@ -10,6 +10,7 @@
 
 #include "irods_message_broker.hpp"
 #include "irods_load_plugin.hpp"
+#include "irods_api_envelope.hpp"
 
 #include "boost/any.hpp"
 #include "boost/shared_ptr.hpp"
@@ -20,7 +21,7 @@ namespace irods {
     typedef std::function<int(zmq::context_t&, const std::string&)> client_fcn_t;
     static const std::string API_EP_CLIENT("api_endpoint_client");
     static const std::string API_EP_SERVER("api_endpoint_server");
-    static const std::string API_EP_SVR_TO_SVR("api_endpoint_svr_to_svr");
+    static const std::string API_EP_SVR_TO_SVR("api_endpoint_server_to_server");
 
     static const int UNINITIALIZED_PORT = -1;
 

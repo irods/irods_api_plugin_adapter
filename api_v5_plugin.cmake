@@ -63,6 +63,7 @@ foreach(PLUGIN ${IRODS_API_PLUGINS})
   target_include_directories(
     ${PLUGIN}
     PRIVATE
+    ${CMAKE_BINARY_DIR}/include
     ${CMAKE_SOURCE_DIR}/include
     ${IRODS_INCLUDE_DIRS}
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/include
@@ -71,7 +72,6 @@ foreach(PLUGIN ${IRODS_API_PLUGINS})
     ${IRODS_EXTERNALS_FULLPATH_AVRO}/include
     ${IRODS_EXTERNALS_FULLPATH_ZMQ}/include
     ${IRODS_EXTERNALS_FULLPATH_CPPZMQ}/include
-    ${CMAKE_BINARY_DIR}/include
     )
 
   target_link_libraries(

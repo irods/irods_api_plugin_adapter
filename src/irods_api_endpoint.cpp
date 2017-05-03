@@ -96,6 +96,8 @@ namespace irods {
                 THROW(SYS_INVALID_INPUT_PARAM, msg);
             }
 
+            envelope.connection_type = irods::API_EP_SERVER;
+
             auto out = avro::memoryOutputStream();
             auto enc = avro::binaryEncoder();
             enc->init( *out );

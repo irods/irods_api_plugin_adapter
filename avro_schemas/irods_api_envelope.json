@@ -3,6 +3,7 @@
     "name": "api_envelope",
     "fields" : [
         {"name": "endpoint", "type": "string"},
+        {"name": "connection_type", "type": "string"},
         {"name": "payload", "type": "bytes"}
     ]
 }
