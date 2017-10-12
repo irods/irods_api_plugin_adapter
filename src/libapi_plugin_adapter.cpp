@@ -54,34 +54,12 @@ void clear_bytes_buf(void* _in) {
 }
 
 
-    #define CALL_API_PLUGIN_ADAPTER call_api_plugin_adapter 
+    #define CALL_API_PLUGIN_ADAPTER call_api_plugin_adapter
 #else
-    #define CALL_API_PLUGIN_ADAPTER NULL 
+    #define CALL_API_PLUGIN_ADAPTER NULL
 #endif
 
 #ifdef RODS_SERVER
-//TODO: throw irods::exception
-std::unique_ptr<irods::api_endpoint> create_command_object(
-    const std::string& _ep_name,
-    const std::string& _ep_type) {
-
-    // TODO: consider server-to-server redirection
-    irods::api_endpoint* ep_ptr = nullptr;
-    irods::error ret = irods::load_plugin<irods::api_endpoint>(
-                           ep_ptr,
-                           _ep_name + "_server",
-                           "api_v5",
-                           "version_5_endpoint",                           
-                           _ep_type);//XXXX - irods::API_EP_SERVER);
-    if(!ep_ptr || !ret.ok()) {
-        THROW(ret.code(), ret.result());
-    }
-
-    return std::unique_ptr<irods::api_endpoint>(ep_ptr);
-}
-
-
-
 
 // =-=-=-=-=-=-=-
 // api function to be referenced by the entry
@@ -94,7 +72,7 @@ int rs_api_plugin_adapter(
 
     try {
         // =-=-=-=-=-=-=-
-        // unpack the avro api envelope 
+        // unpack the avro api envelope
         auto in = avro::memoryInputStream(
                       static_cast<const uint8_t*>( _inp->buf ),
                       _inp->len );
@@ -106,21 +84,21 @@ int rs_api_plugin_adapter(
         rodsLog(
             LOG_DEBUG,
             "api_plugin_adapter calling endpoint [%s]",
-            envelope.endpoint.c_str() );
+            envelope.endpoint_name.c_str() );
 
         // =-=-=-=-=-=-=-
         // TODO: wire up dynPEP rule invocation here for PRE
         // =-=-=-=-=-=-=-
-        
+
         // =-=-=-=-=-=-=-
         // load the api_v5 plugin and get the handle
-        std::unique_ptr<irods::api_endpoint> ep_ptr = create_command_object(
-                                                          envelope.endpoint,
+        std::shared_ptr<irods::api_endpoint> ep_ptr = irods::create_command_object(
+                                                          envelope.endpoint_name,
                                                           envelope.connection_type);
         // =-=-=-=-=-=-=-
         // initialize the API plugin with the payload
-        zmq::context_t zmq_ctx(1); 
-        ep_ptr->initialize(_comm, &zmq_ctx, std::vector<std::string>(), envelope.payload);
+        zmq::context_t zmq_ctx(1);
+        ep_ptr->initialize(_comm, &zmq_ctx, {}, {}, envelope.payload);
 
         // =-=-=-=-=-=-=-
         // start the api thread
@@ -149,7 +127,7 @@ int rs_api_plugin_adapter(
                 __FUNCTION__,
                 ret);
         }
-        
+
         ep_ptr->wait();
 
         // =-=-=-=-=-=-=-
@@ -179,8 +157,8 @@ extern "C" {
     // =-=-=-=-=-=-=-
     // factory function to provide instance of the plugin
     irods::api_entry* plugin_factory(
-        const std::string&,     //_inst_name
-        const std::string& ) { // _context
+        const std::string&, //_inst_name
+        const irods::connection_t) { //_connection_type
         // =-=-=-=-=-=-=-
         // create a api def object
         irods::apidef_t def = { 5000,             // api number
@@ -190,7 +168,7 @@ extern "C" {
                                 "BytesBuf_PI", 0, // in PI / bs flag
                                 "PortalOprOut_PI", 0, // out PI / bs flag
                                 plugin_op,        // operation
-								"rs_api_plugin_adapter", // operation name
+                                "rs_api_plugin_adapter", // operation name
                                 clear_portal,  // output clear fcn
                                 (funcPtr)CALL_API_PLUGIN_ADAPTER
                               };

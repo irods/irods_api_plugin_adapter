@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5.0 FATAL_ERROR) #CPACK_DEBIAN_<COMPONENT>_PACKAGE_NAME
 
-find_package(IRODS 4.2.0 EXACT REQUIRED)
+find_package(IRODS 4.2.2 EXACT REQUIRED)
 
 set(CMAKE_C_COMPILER ${IRODS_EXTERNALS_FULLPATH_CLANG}/bin/clang)
 set(CMAKE_CXX_COMPILER ${IRODS_EXTERNALS_FULLPATH_CLANG}/bin/clang++)
@@ -36,6 +36,7 @@ add_compile_options(-nostdinc++ -Wall -Wextra -Werror -Wno-unused-parameter)
 link_libraries(c++abi)
 link_libraries(pthread)
 link_libraries(dl)
+link_libraries(${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_program_options.so )
 
 include_directories(${IRODS_EXTERNALS_FULLPATH_CLANG}/include/c++/v1)
 
@@ -44,6 +45,7 @@ set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-z,defs")
 add_compile_options(-Wno-unused-parameter) # Until fix of irods_re_plugin.hpp
 add_compile_options(-Wno-unneeded-internal-declaration) # Until fix of https://github.com/irods/irods/issues/3396
 
+include(avro_headers.cmake)
 include(api_plugin.cmake)
 include(api_v5_plugin.cmake)
 include(icommand.cmake)

@@ -43,8 +43,9 @@ add_library(
   irods_api_endpoint
   SHARED
   src/irods_api_endpoint.cpp
+  ${CMAKE_BINARY_DIR}/include/irods_api_envelope.hpp
   )
-  
+
 set_property(TARGET irods_api_endpoint PROPERTY CXX_STANDARD ${IRODS_CXX_STANDARD})
 
 target_include_directories(
@@ -81,20 +82,6 @@ install(
   DESTINATION usr/lib/
   )
 
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include")
-
-add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/include/irods_api_envelope.hpp
-    COMMAND ${IRODS_EXTERNALS_FULLPATH_AVRO}/bin/avrogencpp -n irods -o ${CMAKE_BINARY_DIR}/include/irods_api_envelope.hpp -i ${CMAKE_SOURCE_DIR}/avro_schemas/irods_api_envelope.json
-    MAIN_DEPENDENCY ${CMAKE_SOURCE_DIR}/avro_schemas/irods_api_envelope.json
-)
-
-set_source_files_properties(
-   ${CMAKE_SOURCE_DIR}/src/libapi_plugin_adapter.cpp
-   PROPERTIES
-   OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/include/irods_api_envelope.hpp
-)
-
 install(
      FILES
      ${CMAKE_BINARY_DIR}/include/irods_api_envelope.hpp
@@ -108,6 +95,7 @@ foreach(PLUGIN ${IRODS_API_PLUGINS})
     ${PLUGIN}
     MODULE
     ${IRODS_API_PLUGIN_SOURCES_${PLUGIN}}
+    ${CMAKE_BINARY_DIR}/include/irods_api_envelope.hpp
     )
 
   target_include_directories(
@@ -127,6 +115,7 @@ foreach(PLUGIN ${IRODS_API_PLUGINS})
   target_link_libraries(
     ${PLUGIN}
     PRIVATE
+    irods_api_endpoint
     ${IRODS_API_PLUGIN_LINK_LIBRARIES_${PLUGIN}}
     ${IRODS_EXTERNALS_FULLPATH_AVRO}/lib/libavrocpp.so
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_filesystem.so

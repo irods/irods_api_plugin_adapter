@@ -14,6 +14,7 @@
 
 #include "boost/any.hpp"
 #include "boost/lexical_cast.hpp"
+#include "boost/program_options.hpp"
 
 // =-=-=-=-=-=-=-
 // stl includes
@@ -24,14 +25,16 @@
 
 typedef irods::api_plugin_adapter_test_request api_req_t;
 
+namespace po = boost::program_options;
+
 extern "C" {
     void api_adapter_test_executor_server_to_server(
-        irods::api_endpoint*  _endpoint ) {
+        std::shared_ptr<irods::api_endpoint>  _ep_ptr ) {
         return;
     } // api_adapter_test_executor
 
     void api_adapter_test_executor_server(
-        irods::api_endpoint*  _endpoint ) {
+        std::shared_ptr<irods::api_endpoint>  _ep_ptr ) {
         typedef irods::message_broker::data_type data_t;
 
         // =-=-=-=-=-=-=-
@@ -43,18 +46,18 @@ extern "C" {
         const int  end_port = irods::get_server_property<const int>(
                                   irods::CFG_SERVER_PORT_RANGE_END_KW);
         int port = bro.bind_to_port_in_range(start_port, end_port);
-        _endpoint->port(port);
+        _ep_ptr->port(port);
 
         // =-=-=-=-=-=-=-
         // fetch the payload to extract the response string
         api_req_t api_req;
         try {
-            _endpoint->payload<api_req_t>(api_req);
+            _ep_ptr->payload<api_req_t>(api_req);
         }
         catch(const boost::bad_any_cast& _e) {
             // end of protocol
             irods::log(LOG_ERROR, _e.what());
-            _endpoint->done(true);
+            _ep_ptr->done(true);
             //TODO: add to rError for client
             return;
         }
@@ -88,33 +91,33 @@ extern "C" {
             resp_string += "], this is only a test";
 
             data_t resp_data;
-            resp_data.assign(resp_string.begin(), resp_string.end()); 
+            resp_data.assign(resp_string.begin(), resp_string.end());
             std::cout << "SERVER sending response [" << resp_string << "]" << std::endl;
-            
+
             // =-=-=-=-=-=-=-
-            // set the message for sending, then block 
+            // set the message for sending, then block
             bro.send( resp_data );
         } // while true
 
         std::cout << "api_adapter_test_executor - done" << std::endl;
         // end of protocol
-        _endpoint->done(true);
+        _ep_ptr->done(true);
 
         return;
 
     } // api_adapter_test_executor
 
     void api_adapter_test_executor_client(
-        irods::api_endpoint*  _endpoint ) {
+        std::shared_ptr<irods::api_endpoint>  _ep_ptr ) {
 
-        zmq::socket_t cmd_skt(*_endpoint->ctrl_ctx(), ZMQ_REP);
+        zmq::socket_t cmd_skt(*_ep_ptr->ctrl_ctx(), ZMQ_REP);
         cmd_skt.connect("inproc://client_comms");
 
         try {
             typedef irods::message_broker::data_type data_t;
             irods::message_broker bro("ZMQ_REQ");
 
-            int port = _endpoint->port();
+            int port = _ep_ptr->port();
             std::stringstream conn_sstr;
             conn_sstr << "tcp://localhost:";
             conn_sstr << port;
@@ -124,12 +127,12 @@ extern "C" {
             // fetch the payload to extract the request string
             api_req_t api_req;
             try {
-                _endpoint->payload<api_req_t>(api_req);
+                _ep_ptr->payload<api_req_t>(api_req);
             }
             catch(const boost::bad_any_cast& _e) {
                 // end of protocol
                 std::cerr << _e.what() << std::endl;
-                _endpoint->done(true);
+                _ep_ptr->done(true);
                 //TODO: notify server of failure
                 return;
             }
@@ -138,24 +141,24 @@ extern "C" {
                 zmq::message_t rcv_msg;
                 bool ret = cmd_skt.recv( &rcv_msg, ZMQ_DONTWAIT);
                 if( ret || rcv_msg.size() > 0) {
-     
+
                     std::string in_str;
                     in_str.assign(
                         (char*)rcv_msg.data(),
                         ((char*)rcv_msg.data())+rcv_msg.size());
 
-                    std::cout << "CMD RECV - [" << in_str << "]" << std::endl; 
+                    std::cout << "CMD RECV - [" << in_str << "]" << std::endl;
                     // =-=-=-=-=-=--=
-                    // process events from the client 
+                    // process events from the client
                     if("quit" == in_str) {
                         std::cout << "CMD sending quit" << std::endl;
                         data_t req_data;
-                        req_data.assign(in_str.begin(), in_str.end()); 
+                        req_data.assign(in_str.begin(), in_str.end());
                         bro.send( req_data );
-                        
+
                         data_t resp_data;
                         bro.receive(resp_data);
-                                  
+
                         zmq::message_t snd_msg(3);
                         memcpy(snd_msg.data(), "ACK", 3);
                         cmd_skt.send(snd_msg);
@@ -176,20 +179,20 @@ extern "C" {
                 req_string += "], this is only a test.";
 
                 data_t req_data;
-                req_data.assign(req_string.begin(), req_string.end()); 
+                req_data.assign(req_string.begin(), req_string.end());
 
                 // =-=-=-=-=-=-=-
-                // set the message for sending, then block 
+                // set the message for sending, then block
                 //std::cout << "CLIENT sending: [" << req_string << "]" << std::endl;
                 bro.send( req_data );
-                
+
                 // "do stuff"
                 //std::cout << "CLIENT doing some work" << std::endl;
                 //std::cout << "CLIENT doing some work" << std::endl;
 
                 data_t resp_data;
                 bro.receive(resp_data);
-                
+
                 //std::cout << "CLIENT doing some more work" << std::endl;
 
                 std::string resp_string;
@@ -199,7 +202,7 @@ extern "C" {
             } // while
 
             // end of protocol
-            _endpoint->done(true);
+            _ep_ptr->done(true);
         }
         catch(const zmq::error_t& _e) {
             std::cerr << _e.what() << std::endl;
@@ -213,6 +216,10 @@ extern "C" {
 
 class api_adapter_test_api_endpoint : public irods::api_endpoint {
     public:
+        const std::string TEST_KW{"test"};
+        const std::string request_string_kw{"request_string"};
+        const std::string response_string_kw{"response_string"};
+
         // =-=-=-=-=-=-=-
         // provide thread executors to the invoke() method
         void capture_executors(
@@ -224,29 +231,69 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
             _svr_to_svr = api_adapter_test_executor_server_to_server;
         }
 
-        api_adapter_test_api_endpoint(const std::string& _ctx) :
-            irods::api_endpoint(_ctx),
+        api_adapter_test_api_endpoint(const irods::connection_t _connection_type) :
+            irods::api_endpoint(_connection_type),
             status_(0) {
+                name_ = "api_plugin_adapter_test";
+        }
+
+        std::set<std::string> provides() {
+            return {TEST_KW};
+        }
+
+        const std::tuple<std::string, po::options_description, po::positional_options_description>& get_program_options_and_usage(const std::string& _subcommand) {
+            static const std::map<std::string, std::tuple<std::string, po::options_description, po::positional_options_description>> options_and_usage_map{
+                {TEST_KW, {
+                        "[" + request_string_kw + "] [" + response_string_kw + "]",
+                        [this]() {
+                            po::options_description desc{"iRODS v5 api test"};
+                            desc.add_options()
+                                (request_string_kw.c_str(), po::value<std::string>(), "String to use in the request message during the test. Defaults to \"DEFAULT_REQUEST\".")
+                                (response_string_kw.c_str(), po::value<std::string>(), "String to use in the response message during the test. Defaults to \"DEFAULT RESPONSE\".")
+                                ;
+                            return desc;
+                        }(),
+                        [this]() {
+                            po::positional_options_description positional_desc{};
+                            positional_desc.add(request_string_kw.c_str(), 1);
+                            positional_desc.add(response_string_kw.c_str(), 1);
+                            return positional_desc;
+                        }()
+                    }
+                }
+            };
+            return options_and_usage_map.at(_subcommand);
+        }
+
+        api_req_t get_request_from_command_args(const std::string& _subcommand, const std::vector<std::string>& _args) {
+            auto& program_options_and_usage = get_program_options_and_usage(_subcommand);
+            po::variables_map vm;
+            po::store(po::command_line_parser(_args).
+                    options(std::get<po::options_description>(program_options_and_usage)).
+                    positional(std::get<po::positional_options_description>(program_options_and_usage)).
+                    run(), vm);
+            po::notify(vm);
+
+            api_req_t req{};
+            req.request_string  = vm.count(request_string_kw) ?
+                vm[request_string_kw].as<std::string>() :
+                "DEFAULT_REQUEST";
+            req.response_string  = vm.count(response_string_kw) ?
+                vm[response_string_kw].as<std::string>() :
+                "DEFAULT_RESPONSE";
+
+            return req;
         }
 
         // =-=-=-=-=-=-=-
         // used for client-side initialization
         void init_and_serialize_payload(
+            const std::string&              _subcommand,
             const std::vector<std::string>& _args,
             std::vector<uint8_t>&           _out ) {
-            for( auto arg : _args ) {
-                std::cout << "arg["<< arg << "]" << std::endl;
-            }
 
-            api_req_t req;
-            req.request_string = "DEFAULT_REQUEST";
-            req.response_string = "DEFAULT_RESPONSE";
-            if(_args.size() >= 3 ) {
-                req.request_string  = _args[2];
-            }
-            if(_args.size() >= 4 ) {
-                req.response_string = _args[3];
-            }
+
+            api_req_t req = get_request_from_command_args(_subcommand, _args);
 
             auto out = avro::memoryOutputStream();
             auto enc = avro::binaryEncoder();
@@ -296,8 +343,8 @@ class api_adapter_test_api_endpoint : public irods::api_endpoint {
 extern "C" {
     irods::api_endpoint* plugin_factory(
         const std::string&,     //_inst_name
-        const std::string& _context ) { // _context
-            return new api_adapter_test_api_endpoint(_context);
+        const irods::connection_t& _connection_type ) { // _context
+            return new api_adapter_test_api_endpoint(_connection_type);
     }
 };
 

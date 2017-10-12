@@ -2,8 +2,14 @@
     "type": "record",
     "name": "api_envelope",
     "fields" : [
-        {"name": "endpoint", "type": "string"},
-        {"name": "connection_type", "type": "string"},
+        { "name": "endpoint_name", "type": "string" },
+        {
+            "name": "connection_type", "type": {
+                "type": "enum",
+                "name": "connection_t",
+                "symbols": ["API_EP_CLIENT", "API_EP_SERVER", "API_EP_SERVER_TO_SERVER"]
+            }
+        },
         {"name": "payload", "type": "bytes"}
     ]
 }

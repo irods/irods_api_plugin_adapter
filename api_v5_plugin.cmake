@@ -39,25 +39,13 @@ set(
   api_plugin_adapter_test_client
   )
 
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include")
-
-add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/include/irods_api_plugin_adapter_test_request.hpp
-    COMMAND ${IRODS_EXTERNALS_FULLPATH_AVRO}/bin/avrogencpp -n irods -o ${CMAKE_BINARY_DIR}/include/irods_api_plugin_adapter_test_request.hpp -i ${CMAKE_SOURCE_DIR}/avro_schemas/irods_api_plugin_adapter_test_request.json
-    MAIN_DEPENDENCY ${CMAKE_SOURCE_DIR}/avro_schemas/irods_api_plugin_adapter_test_request.json
-)
-
-set_source_files_properties(
-   ${CMAKE_SOURCE_DIR}/src/libirods_api_plugin_adapter_test.cpp
-   PROPERTIES
-   OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/include/irods_api_plugin_adapter_test_request.hpp
-)
-
 foreach(PLUGIN ${IRODS_API_PLUGINS})
   add_library(
     ${PLUGIN}
     MODULE
     ${IRODS_API_PLUGIN_SOURCES_${PLUGIN}}
+    ${CMAKE_BINARY_DIR}/include/irods_api_plugin_adapter_test_request.hpp
+    ${CMAKE_BINARY_DIR}/include/irods_api_envelope.hpp
     )
 
   target_include_directories(

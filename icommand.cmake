@@ -1,9 +1,10 @@
 add_executable(
-  iapi_adapter_test
-  ${CMAKE_SOURCE_DIR}/src/iapi_adapter_test.cpp
+  irods
+  ${CMAKE_SOURCE_DIR}/src/irods.cpp
+  ${CMAKE_BINARY_DIR}/include/irods_api_envelope.hpp
   )
 target_link_libraries(
-  iapi_adapter_test
+  irods
   PRIVATE
   irods_client
   irods_common
@@ -17,7 +18,7 @@ target_link_libraries(
   ${IRODS_EXTERNALS_FULLPATH_ZMQ}/lib/libzmq.so
   )
 target_include_directories(
-  iapi_adapter_test
+  irods
   PRIVATE
   ${CMAKE_BINARY_DIR}/include
   ${CMAKE_SOURCE_DIR}/include
@@ -30,13 +31,13 @@ target_include_directories(
   ${IRODS_EXTERNALS_FULLPATH_ZMQ}/include
   ${IRODS_EXTERNALS_FULLPATH_AVRO}/include
   )
-target_compile_definitions(iapi_adapter_test PRIVATE RODS_SERVER ${IRODS_COMPILE_DEFINITIONS} BOOST_SYSTEM_NO_DEPRECATED)
-target_compile_options(iapi_adapter_test PRIVATE -Wno-write-strings)
-set_property(TARGET iapi_adapter_test PROPERTY CXX_STANDARD ${IRODS_CXX_STANDARD})
+target_compile_definitions(irods PRIVATE RODS_SERVER ${IRODS_COMPILE_DEFINITIONS} BOOST_SYSTEM_NO_DEPRECATED)
+target_compile_options(irods PRIVATE -Wno-write-strings)
+set_property(TARGET irods PROPERTY CXX_STANDARD ${IRODS_CXX_STANDARD})
 
 install(
   TARGETS
-  iapi_adapter_test
+  irods
   RUNTIME
   DESTINATION usr/bin
   )

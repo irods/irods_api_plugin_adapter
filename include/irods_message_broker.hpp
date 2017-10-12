@@ -81,7 +81,7 @@ namespace irods {
                     int ret = skt_ptr_->recv( &msg, flags );
                     if(-1 == ret && ZMQ_DONTWAIT == flags) {
                         if(debug) {
-                            std::cout << "dontwait failed in recieve" << std::endl; fflush(stdout);
+                            std::cout << "dontwait failed in receive" << std::endl; fflush(stdout);
                         }
                         if(zmq_errno() == EAGAIN) {
                             if(debug) {
@@ -94,7 +94,7 @@ namespace irods {
                         int eno = zmq_errno();
                         std::cout << "read error :: ret - " << ret << "    errno - " << eno << std::endl;
                         if(EAGAIN == ret || eno == EAGAIN) {
-                            THROW(SYS_SOCK_READ_ERR, "time out in recieve");
+                            THROW(SYS_SOCK_READ_ERR, "time out in receive");
                         }
 
                         //TODO: need backoff

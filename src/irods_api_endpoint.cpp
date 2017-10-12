@@ -9,32 +9,48 @@
 #include "irods_api_envelope.hpp"
 
 namespace irods {
-    static irods::error create_client_command_object(
-        const std::string&    _ep_name,
-        irods::api_endpoint*& _endpoint ) {
 
+    std::shared_ptr<api_endpoint> create_command_object(
+        const std::string& _endpoint_name,
+        const connection_t _connection_type) {
+
+        const std::string suffix = [_connection_type]() {
+            switch (_connection_type) {
+                case API_EP_CLIENT:
+                    return "_client";
+                case API_EP_SERVER:
+                    return "_server";
+                case API_EP_SERVER_TO_SERVER:
+                    return "_server";
+                default:
+                    return "_unknown_connection_type";
+            }
+        }();
+
+        api_endpoint* endpoint;
         error ret = irods::load_plugin<api_endpoint>(
-                        _endpoint,
-                        _ep_name + "_client",
+                        endpoint,
+                        _endpoint_name + suffix,
                         "api_v5",
                         "version_5_endpoint",
-                        API_EP_CLIENT);
-        if(!_endpoint || !ret.ok()) {
-            return PASS(ret);
+                        _connection_type);
+        if(!ret.ok()) {
+            THROW(ret.code(), ret.result());
         }
 
-        return SUCCESS();
-    } // create_client_command_object
+        return std::shared_ptr<api_endpoint>{endpoint};
+    } // create_command_object
 
     void api_v5_call_client(
-        const std::string&             _host,
-        const int                      _port,
-        const std::string&             _zone,
-        const std::string&             _user,
-        zmq::context_t&                _zmq_ctx,
-        client_fcn_t                   _cli_fcn,
-        const std::string&             _endpoint,
-        const std::vector<std::string> _args ) {
+        const std::string&              _host,
+        const int                       _port,
+        const std::string&              _zone,
+        const std::string&              _user,
+        zmq::context_t&                 _zmq_ctx,
+        client_fcn_t                    _cli_fcn,
+        std::shared_ptr<api_endpoint>   _ep_ptr,
+        const std::string&              _subcommand,
+        const std::vector<std::string>& _args ) {
         // =-=-=-=-=-=-=-
         // connect to the irods server
         rErrMsg_t errMsg;
@@ -57,42 +73,33 @@ namespace irods {
             THROW(status, "clientLogin failed");
         }
 
-        api_v5_call_client(conn, _zmq_ctx, _cli_fcn, _endpoint, _args);
+        api_v5_call_client(conn, _zmq_ctx, _cli_fcn, _ep_ptr, _subcommand, _args);
 
     } // api_v5_call_client
 
     void api_v5_call_client(
-        rcComm_t*                      _conn,
-        zmq::context_t&                _zmq_ctx,
-        client_fcn_t                   _cli_fcn,
-        const std::string&             _endpoint,
-        const std::vector<std::string> _args ) {
+        rcComm_t*                       _conn,
+        zmq::context_t&                 _zmq_ctx,
+        client_fcn_t                    _cli_fcn,
+        std::shared_ptr<api_endpoint>   _ep_ptr,
+        const std::string&              _subcommand,
+        const std::vector<std::string>& _args ) {
         try {
             // =-=-=-=-=-=-=-
             // create the envelope for the given endpoint
             irods::api_envelope envelope;
-            envelope.endpoint = _args[1];
+            envelope.endpoint_name = _ep_ptr->name();
             envelope.payload.clear();
 
             // =-=-=-=-=-=-=-
             // initialize the client-side of the endpoint
-            // NOTE: ep_ptr worker thread joins on dtor
-            irods::api_endpoint* ep_ptr = nullptr;
-            irods::error ret = create_client_command_object(
-                                   envelope.endpoint,
-                                   ep_ptr);
-            if(!ret.ok()) {
-                THROW(ret.code(), ret.result());
-            }
-
-            // =-=-=-=-=-=-=-
-            // initialize the client-side of the endpoint
             try {
-                ep_ptr->initialize(_conn, &_zmq_ctx, _args, envelope.payload);
+                _ep_ptr->initialize(_conn, &_zmq_ctx, _subcommand, _args, envelope.payload);
             }
             catch(const irods::exception& _e) {
+                std::cerr << _e.what() << std::endl;
                 std::string msg = "failed to initialize with endpoint: ";
-                msg += envelope.endpoint;
+                msg += _ep_ptr->name();
                 THROW(SYS_INVALID_INPUT_PARAM, msg);
             }
 
@@ -104,34 +111,33 @@ namespace irods {
             avro::encode( *enc, envelope );
             auto data = avro::snapshot( *out );
 
-            bytesBuf_t inp;
-            memset(&inp, 0, sizeof(bytesBuf_t));
-            inp.len = data->size();
-            inp.buf = data->data();
+            bytesBuf_t inp{
+                .len = static_cast<int>(data->size()),
+                .buf = data->data()
+            };
 
-            void *tmp_out = NULL;
+            void *tmp_out = nullptr;
             int status = procApiRequest(
-                             _conn, 5000, &inp, NULL,
-                             &tmp_out, NULL );
+                             _conn, 5000, &inp, nullptr,
+                             &tmp_out, nullptr );
             if ( status < 0 ) {
                 //printErrorStack( _conn->rError );
                 THROW(status, "v5 API failed");
             }
             else {
-                if ( tmp_out != NULL ) {
+                if ( tmp_out != nullptr ) {
                     portalOprOut_t* portal = static_cast<portalOprOut_t*>( tmp_out );
-                    ep_ptr->port(portal->portList.portNum);
-                    
-                    ep_ptr->invoke();
-                    _cli_fcn(_zmq_ctx, _endpoint);
-                    ep_ptr->wait();
+                    _ep_ptr->port(portal->portList.portNum);
+
+                    _ep_ptr->invoke();
+                    _cli_fcn(_zmq_ctx, _ep_ptr->name());
+                    _ep_ptr->wait();
                 }
                 else {
                     printf( "ERROR: the 'out' variable is null\n" );
                 }
             }
 
-            delete ep_ptr;
         }
         catch(const irods::exception&) {
             throw;
@@ -143,13 +149,13 @@ namespace irods {
 
     } // api_v5_call_client
 
-    api_endpoint::api_endpoint(const std::string& _ctx) :
-        context_(_ctx),
+    api_endpoint::api_endpoint(const connection_t _connection_type) :
+        connection_type_(_connection_type),
         status_(0),
         done_flag_(false),
         port_(UNINITIALIZED_PORT) {
     }
-   
+
     api_endpoint::~api_endpoint() {
         // wait for the api thread to finish
     }
