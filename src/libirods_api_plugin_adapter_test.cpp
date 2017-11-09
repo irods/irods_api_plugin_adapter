@@ -35,7 +35,6 @@ extern "C" {
 
     void api_adapter_test_executor_server(
         std::shared_ptr<irods::api_endpoint>  _ep_ptr ) {
-        typedef irods::message_broker::data_type data_t;
 
         // =-=-=-=-=-=-=-
         //TODO: parameterize
@@ -63,18 +62,14 @@ extern "C" {
         }
 
         while(true) {
-            data_t req_data;
-            bro.receive(req_data);
+            const auto req_data = bro.receive();
 
             std::string req_string;
             req_string.assign(req_data.begin(), req_data.end());
 
             if("quit" == req_string) {
                 // respond to the client side
-                char ack[] = {"ACK"};
-                data_t resp_data;
-                resp_data.assign(ack, ack+3);
-                bro.send( resp_data );
+                bro.send(std::string{"ACK"});
                 break;
             }
 
@@ -90,13 +85,11 @@ extern "C" {
             resp_string += api_req.response_string;
             resp_string += "], this is only a test";
 
-            data_t resp_data;
-            resp_data.assign(resp_string.begin(), resp_string.end());
             std::cout << "SERVER sending response [" << resp_string << "]" << std::endl;
 
             // =-=-=-=-=-=-=-
             // set the message for sending, then block
-            bro.send( resp_data );
+            bro.send( resp_string );
         } // while true
 
         std::cout << "api_adapter_test_executor - done" << std::endl;
@@ -114,7 +107,6 @@ extern "C" {
         cmd_skt.connect("inproc://client_comms");
 
         try {
-            typedef irods::message_broker::data_type data_t;
             irods::message_broker bro("ZMQ_REQ");
 
             int port = _ep_ptr->port();
@@ -152,23 +144,15 @@ extern "C" {
                     // process events from the client
                     if("quit" == in_str) {
                         std::cout << "CMD sending quit" << std::endl;
-                        data_t req_data;
-                        req_data.assign(in_str.begin(), in_str.end());
-                        bro.send( req_data );
+                        bro.send(in_str);
 
-                        data_t resp_data;
-                        bro.receive(resp_data);
-
-                        zmq::message_t snd_msg(3);
-                        memcpy(snd_msg.data(), "ACK", 3);
-                        cmd_skt.send(snd_msg);
+                        const auto resp_data = bro.receive();
+                        bro.send(std::string{"ACK"});
 
                         break;
                     }
 
-                    zmq::message_t snd_msg(3);
-                    memcpy(snd_msg.data(), "ACK", 3);
-                    cmd_skt.send(snd_msg);
+                    bro.send(std::string{"ACK"});
 
                 } // if event
 
@@ -178,25 +162,21 @@ extern "C" {
                 req_string += api_req.request_string;
                 req_string += "], this is only a test.";
 
-                data_t req_data;
-                req_data.assign(req_string.begin(), req_string.end());
-
                 // =-=-=-=-=-=-=-
                 // set the message for sending, then block
                 //std::cout << "CLIENT sending: [" << req_string << "]" << std::endl;
-                bro.send( req_data );
+                bro.send( req_string );
 
                 // "do stuff"
                 //std::cout << "CLIENT doing some work" << std::endl;
                 //std::cout << "CLIENT doing some work" << std::endl;
 
-                data_t resp_data;
-                bro.receive(resp_data);
+                const auto resp_data = bro.receive();
 
                 //std::cout << "CLIENT doing some more work" << std::endl;
 
-                std::string resp_string;
-                resp_string.assign(resp_data.begin(), resp_data.end());
+                //std::string resp_string;
+                //resp_string.assign(resp_data.begin(), resp_data.end());
                 //std::cout << "CLIENT RECEIVED response: [" << resp_string << "]" << std::endl;
 
             } // while

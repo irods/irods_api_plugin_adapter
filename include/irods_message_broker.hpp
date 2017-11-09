@@ -28,7 +28,7 @@ namespace irods {
             }
         }
 
-        message_broker(const std::string& _ctx) : 
+        message_broker(const std::string& _ctx) :
             ctx_ptr_(new zmq::context_t(1)), do_not_delete_ctx_ptr_(false) {
             try {
                 create_socket(_ctx);
@@ -45,73 +45,11 @@ namespace irods {
             }
         }
 
-        void send(const data_type& _data) {
-            try {
-                zmq::message_t msg( _data.size() );
-                memcpy(
-                    msg.data(),
-                    _data.data(),
-                    _data.size() );
-                while(!skt_ptr_->send( msg ) ) {
-                    //TODO: need backoff
-                        continue;
-                }
-            }
-            catch ( const zmq::error_t& _e) {
-                std::cerr << _e.what() << std::endl;
-            }
-        }
+        template<typename T>
+        void send(const T& _data);
 
-        void send(zmq::message_t& _data) {
-            try {
-                while(!skt_ptr_->send( _data ) ) {
-                    //TODO: need backoff
-                        continue;
-                }
-            }
-            catch ( const zmq::error_t& _e) {
-                std::cerr << _e.what() << std::endl;
-            }
-        }
-
-        void receive(data_type& _data, const int flags=0, const bool debug=false) {
-            try {
-                zmq::message_t msg;
-                while(true) {
-                    int ret = skt_ptr_->recv( &msg, flags );
-                    if(-1 == ret && ZMQ_DONTWAIT == flags) {
-                        if(debug) {
-                            std::cout << "dontwait failed in receive" << std::endl; fflush(stdout);
-                        }
-                        if(zmq_errno() == EAGAIN) {
-                            if(debug) {
-                               std::cout << "dontwait with EAGAIN" << std::endl; fflush(stdout);
-                            }
-                            break;
-                        }
-                    }
-                    else if(ret <= 0 && ZMQ_DONTWAIT != flags) {
-                        int eno = zmq_errno();
-                        std::cout << "read error :: ret - " << ret << "    errno - " << eno << std::endl;
-                        if(EAGAIN == ret || eno == EAGAIN) {
-                            THROW(SYS_SOCK_READ_ERR, "time out in receive");
-                        }
-
-                        //TODO: need backoff
-                        continue;
-                    }
-                    break;
-                }
-            
-                if(msg.size() > 0) {
-                    _data.resize(msg.size());
-                    std::memcpy(_data.data(), msg.data(), msg.size());
-                }
-            }
-            catch ( const zmq::error_t& _e) {
-                std::cerr << _e.what() << std::endl;
-            }
-        }
+        template <typename T = data_type>
+        T receive(const int flags=0, const bool debug=false);
 
         void connect(const std::string& _conn) {
             try {
@@ -197,11 +135,110 @@ namespace irods {
             }
         }
 
+        void send_zmq(zmq::message_t& _data) {
+            try {
+                while(!skt_ptr_->send( _data ) ) {
+                    //TODO: need backoff
+                        continue;
+                }
+            }
+            catch ( const zmq::error_t& _e) {
+                std::cerr << _e.what() << std::endl;
+            }
+        }
+
         zmq::context_t* ctx_ptr_;
         bool do_not_delete_ctx_ptr_;
         std::unique_ptr<zmq::socket_t> skt_ptr_;
 
     }; // class message_broker
+
+    template<typename T>
+    void message_broker::send(const T& _data) {
+        auto out = avro::memoryOutputStream();
+        auto enc = avro::binaryEncoder();
+        enc->init( *out );
+        avro::encode( *enc, _data );
+        const auto encoded_data = avro::snapshot( *out );
+
+        send(*encoded_data);
+    }
+
+    template<>
+    void message_broker::send(const data_type& _data) {
+        zmq::message_t msg( _data.size() );
+        memcpy(
+            msg.data(),
+            _data.data(),
+            _data.size() );
+        send_zmq(msg);
+    }
+
+    template<>
+    void message_broker::send(const std::string& _data) {
+        zmq::message_t msg( _data.size() );
+        memcpy(
+            msg.data(),
+            _data.data(),
+            _data.size() );
+        send_zmq(msg);
+    }
+
+    template <typename T>
+    T message_broker::receive(const int flags, const bool debug) {
+        const auto rcv_msg = receive<data_type>(flags, debug);
+        auto in = avro::memoryInputStream(
+                    &rcv_msg[0],
+                    rcv_msg.size());
+        auto dec = avro::binaryDecoder();
+        dec->init( *in );
+        T value{};
+        avro::decode( *dec, value );
+        return value;
+    }
+
+    template <>
+    message_broker::data_type message_broker::receive(const int flags, const bool debug) {
+        try {
+            zmq::message_t msg;
+            while(true) {
+                int ret = skt_ptr_->recv( &msg, flags );
+                if(-1 == ret && ZMQ_DONTWAIT == flags) {
+                    if(debug) {
+                        std::cout << "dontwait failed in receive" << std::endl; fflush(stdout);
+                    }
+                    if(zmq_errno() == EAGAIN) {
+                        if(debug) {
+                            std::cout << "dontwait with EAGAIN" << std::endl; fflush(stdout);
+                        }
+                        break;
+                    }
+                }
+                else if(ret <= 0 && ZMQ_DONTWAIT != flags) {
+                    int eno = zmq_errno();
+                    std::cout << "read error :: ret - " << ret << "    errno - " << eno << std::endl;
+                    if(EAGAIN == ret || eno == EAGAIN) {
+                        THROW(SYS_SOCK_READ_ERR, "time out in receive");
+                    }
+
+                    //TODO: need backoff
+                    continue;
+                }
+                break;
+            }
+
+            if(msg.size() > 0) {
+                message_broker::data_type data{};
+                data.resize(msg.size());
+                std::memcpy(data.data(), msg.data(), msg.size());
+                return data;
+            }
+        }
+        catch ( const zmq::error_t& _e) {
+            std::cerr << _e.what() << std::endl;
+        }
+        return {};
+    }
 
 }; // namespace irods
 
