@@ -5,41 +5,9 @@
 #include "oprComplete.h"
 
 #include "irods_api_endpoint.hpp"
-#include "irods_load_plugin.hpp"
 #include "irods_api_envelope.hpp"
 
 namespace irods {
-
-    std::shared_ptr<api_endpoint> create_command_object(
-        const std::string& _endpoint_name,
-        const connection_t _connection_type) {
-
-        const std::string suffix = [_connection_type]() {
-            switch (_connection_type) {
-                case API_EP_CLIENT:
-                    return "_client";
-                case API_EP_SERVER:
-                    return "_server";
-                case API_EP_SERVER_TO_SERVER:
-                    return "_server";
-                default:
-                    return "_unknown_connection_type";
-            }
-        }();
-
-        api_endpoint* endpoint;
-        error ret = irods::load_plugin<api_endpoint>(
-                        endpoint,
-                        _endpoint_name + suffix,
-                        "api_v5",
-                        "version_5_endpoint",
-                        _connection_type);
-        if(!ret.ok()) {
-            THROW(ret.code(), ret.result());
-        }
-
-        return std::shared_ptr<api_endpoint>{endpoint};
-    } // create_command_object
 
     void api_v5_call_client(
         const std::string&              _host,
@@ -94,7 +62,10 @@ namespace irods {
             // =-=-=-=-=-=-=-
             // initialize the client-side of the endpoint
             try {
-                _ep_ptr->initialize(_conn, &_zmq_ctx, _subcommand, _args, envelope.payload);
+                _ep_ptr->comm(_conn);
+                _ep_ptr->ctrl_ctx(&_zmq_ctx);
+                _ep_ptr->initialize_from_command(_subcommand, _args);
+                envelope.payload = _ep_ptr->get_request_as_bytes();
             }
             catch(const irods::exception& _e) {
                 std::cerr << _e.what() << std::endl;
@@ -156,15 +127,8 @@ namespace irods {
         port_(UNINITIALIZED_PORT) {
     }
 
-    api_endpoint::~api_endpoint() {
-        // wait for the api thread to finish
-    }
+    int api_endpoint::status(rError_t*) const { return status_; }
 
-    int api_endpoint::status(rError_t*) { return status_; }
-
-    bool api_endpoint::done() { return done_flag_; }
+    bool api_endpoint::done() const { return done_flag_; }
 
 }; // namespace irods
-
-
-

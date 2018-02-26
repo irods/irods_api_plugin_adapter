@@ -55,7 +55,7 @@ int client_interaction(
                 break;
             }
 
-            std::cout << (char*)rcv_msg.data() << std::endl;
+            //std::cout << (char*)rcv_msg.data() << std::endl;
 
             if("quit" == in_str) {
                 std::cout << "Exiting." << std::endl;
@@ -76,7 +76,7 @@ std::tuple<po::variables_map, std::vector<std::string>> get_variable_map_and_sub
         const po::options_description& _desc,
         const po::positional_options_description& _positional_desc) {
 
-    const std::string unrecognized_positional_options_kw = "unrecognized_postional_options";
+    const std::string unrecognized_positional_options_kw{"unrecognized_positional_options"};
 
     po::options_description desc_with_unrecognized{_desc};
     desc_with_unrecognized.add_options() (unrecognized_positional_options_kw.c_str(), po::value<std::vector<std::string>>(), "Unrecognized positional options -- SHOULD NEVER BE VISIBLE IN OUTPUT");
@@ -132,7 +132,9 @@ int main( int _argc, char* _argv[] ) {
 
     std::vector<std::shared_ptr<irods::api_endpoint>> available_plugins{};
     if (vm.count(api_plugin_kw)) {
-        available_plugins.push_back(irods::create_command_object(vm[api_plugin_kw].as<std::string>(), irods::API_EP_CLIENT));
+        if ( auto available_plugin = irods::create_command_object(vm[api_plugin_kw].as<std::string>(), irods::API_EP_CLIENT) ) {
+            available_plugins.push_back(available_plugin);
+        }
     } else {
         std::string plugin_path;
         irods::error ret_for_resolve_plugin_path = irods::resolve_plugin_path("api_v5", plugin_path);
@@ -152,7 +154,7 @@ int main( int _argc, char* _argv[] ) {
             if (boost::algorithm::ends_with(plugin_name, suffix)) {
                 auto plugin_name_base = plugin_name.substr(0, plugin_name.size() - suffix.size());
                 auto ep_ptr = irods::create_command_object(plugin_name_base, irods::API_EP_CLIENT);
-                if (!ep_ptr->provides().empty()) {
+                if (ep_ptr && !ep_ptr->provides().empty()) {
                     available_plugins.push_back(ep_ptr);
                 }
             }
@@ -161,7 +163,7 @@ int main( int _argc, char* _argv[] ) {
 
     std::map<std::string, std::vector<std::shared_ptr<irods::api_endpoint>>> command_map;
     for ( auto ep_ptr : available_plugins ) {
-        for ( auto& command : ep_ptr->provides() ) {
+        for ( const auto& command : ep_ptr->provides() ) {
             command_map[command].push_back(ep_ptr);
         }
     }
@@ -174,7 +176,7 @@ int main( int _argc, char* _argv[] ) {
                 continue;
             }
             std::cout << "Commands for " << ep_ptr->name() << ":" << std::endl;
-            for (auto& command : ep_ptr->provides()) {
+            for (const auto& command : ep_ptr->provides()) {
                 auto& usage_and_options = ep_ptr->get_program_options_and_usage(command);
                 std::cout << _argv[0] << " " << command << " " << std::get<std::string>(usage_and_options) << std::endl;
                 std::cout << std::get<po::options_description>(usage_and_options) << std::endl;
