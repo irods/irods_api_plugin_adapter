@@ -254,7 +254,7 @@ namespace irods {
     } // api_v5_to_v5_call_endpoint
 
     template<typename RequestType>
-    class with_request : private virtual api_endpoint {
+    class with_request : protected virtual api_endpoint {
 
         public:
             using request_t = RequestType;
@@ -294,7 +294,7 @@ namespace irods {
     };
 
     template<typename ResponseType>
-    class with_response : private virtual api_endpoint {
+    class with_response : protected virtual api_endpoint {
         public:
             using response_t = ResponseType;
 
@@ -333,7 +333,7 @@ namespace irods {
     };
 
     template<typename ContextType>
-    class with_context : private virtual api_endpoint {
+    class with_context : protected virtual api_endpoint {
         public:
             using context_t = ContextType;
 
@@ -368,7 +368,7 @@ namespace irods {
             ContextType context_;
     };
 
-    class without_context_initialization : private virtual api_endpoint {
+    class without_context_initialization : protected virtual api_endpoint {
 
         const std::string context_initialization_disabled_message{"This plugin does not support initialization from context"};
         public:
@@ -384,7 +384,7 @@ namespace irods {
                             public virtual without_context_initialization {
     };
 
-    class with_cli_disabled : private virtual api_endpoint {
+    class with_cli_disabled : protected virtual api_endpoint {
         const std::string commands_disabled_message{"This plugin does not support commands"};
         public:
 
