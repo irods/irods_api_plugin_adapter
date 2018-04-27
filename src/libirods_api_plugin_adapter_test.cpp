@@ -35,7 +35,8 @@ class api_adapter_test_api_endpoint :
     public virtual irods::api_endpoint,
     public virtual irods::with_request<irods::api_plugin_adapter_test_request>,
     public virtual irods::with_response<std::string>,
-    public virtual irods::without_context {
+    public virtual irods::without_context,
+    public virtual irods::with_api_request_as_request {
     public:
         const std::string TEST_KW{"test"};
         const std::string request_string_kw{"request_string"};

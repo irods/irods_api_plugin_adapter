@@ -93,14 +93,14 @@ int rs_api_plugin_adapter(
         // =-=-=-=-=-=-=-
         // load the api_v5 plugin and get the handle
         auto ep_ptr = irods::create_command_object(
-                                                          envelope.endpoint_name,
-                                                          envelope.connection_type);
+                envelope.endpoint_name,
+                envelope.connection_type);
         // =-=-=-=-=-=-=-
         // initialize the API plugin with the payload
         zmq::context_t zmq_ctx(1);
         ep_ptr->comm(_comm);
         ep_ptr->ctrl_ctx(&zmq_ctx);
-        ep_ptr->set_request_from_bytes(envelope.payload);
+        ep_ptr->setup_from_api_request(envelope.payload);
 
         // =-=-=-=-=-=-=-
         // start the api thread

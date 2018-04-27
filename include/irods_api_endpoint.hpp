@@ -35,6 +35,7 @@ namespace irods {
         virtual void set_request_from_bytes(const std::vector<uint8_t>&) = 0;
         virtual void set_response_from_bytes(const std::vector<uint8_t>&) = 0;
         virtual void set_context_from_bytes(const std::vector<uint8_t>&) = 0;
+        virtual void setup_from_api_request(const std::vector<uint8_t>&) = 0;
         virtual void capture_executors(thread_executor&,thread_executor&,thread_executor&) = 0;
         virtual const std::set<std::string>& provides() const = 0;
         virtual const std::tuple<std::string,
@@ -405,6 +406,29 @@ namespace irods {
             THROW(SYS_NOT_SUPPORTED, commands_disabled_message);
         }
 
+    };
+
+    class with_api_request_as_request : protected virtual api_endpoint {
+        public:
+
+        void setup_from_api_request(const std::vector<uint8_t>& _api_request_bytes) {
+            set_request_from_bytes(_api_request_bytes);
+        }
+    };
+
+    class with_api_request_as_context : protected virtual api_endpoint {
+        public:
+
+        void setup_from_api_request(const std::vector<uint8_t>& _api_request_bytes) {
+            set_context_from_bytes(_api_request_bytes);
+        }
+    };
+
+    class without_api_request : protected virtual api_endpoint {
+        public:
+
+        void setup_from_api_request(const std::vector<uint8_t>&) {
+        }
     };
 
 }; // namespace irods
