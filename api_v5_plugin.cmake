@@ -65,7 +65,7 @@ foreach(PLUGIN ${IRODS_API_PLUGINS})
   target_link_libraries(
     ${PLUGIN}
     PRIVATE
-    ${CMAKE_BINARY_DIR}/libirods_api_endpoint.so
+    irods_api_endpoint
     ${IRODS_API_PLUGIN_LINK_LIBRARIES_${PLUGIN}}
     ${IRODS_EXTERNALS_FULLPATH_AVRO}/lib/libavrocpp.so
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_filesystem.so

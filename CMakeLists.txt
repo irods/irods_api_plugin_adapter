@@ -90,6 +90,8 @@ elseif (IRODS_LINUX_DISTRIBUTION_NAME STREQUAL "opensuse")
   set(CPACK_RPM_PACKAGE_REQUIRES "${IRODS_PACKAGE_DEPENDENCIES_STRING}, irods-runtime = ${IRODS_VERSION}, libopenssl1_0_0")
 endif()
 
+set(CPACK_RPM_${CPACK_RPM_PACKAGE_NAME}_POST_INSTALL_SCRIPT_FILE "${CMAKE_SOURCE_DIR}/postinst.sh")
+
 if (NOT CPACK_GENERATOR)
   set(CPACK_GENERATOR ${IRODS_CPACK_GENERATOR} CACHE STRING "CPack generator to use, e.g. {DEB, RPM, TGZ}." FORCE)
   message(STATUS "Setting unspecified CPACK_GENERATOR to ${CPACK_GENERATOR}. This is the correct setting for normal builds.")
