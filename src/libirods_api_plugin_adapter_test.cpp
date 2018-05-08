@@ -150,7 +150,7 @@ extern "C" {
 
         // =-=-=-=-=-=-=-
         //TODO: parameterize
-        irods::message_broker bro(irods::zmq_type::RESPONSE);
+        irods::message_broker bro(irods::zmq_type::RESPONSE, {});
 
         const int start_port = irods::get_server_property<const int>(
                                    irods::CFG_SERVER_PORT_RANGE_START_KW);
@@ -206,7 +206,7 @@ extern "C" {
         cmd_skt.connect("inproc://client_comms");
 
         try {
-            irods::message_broker bro(irods::zmq_type::REQUEST);
+            irods::message_broker bro(irods::zmq_type::REQUEST, {});
 
             int port = test_ep_ptr->port();
             std::stringstream conn_sstr;

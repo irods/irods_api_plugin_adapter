@@ -1,11 +1,9 @@
-
-
-
 #ifndef IRODS_MESSAGE_QUEUE_HPP
 #define IRODS_MESSAGE_QUEUE_HPP
 
 #include <vector>
 #include <iostream>
+#include <unistd.h>
 
 #include "zmq.hpp"
 
@@ -16,24 +14,33 @@ namespace irods {
 
     enum zmq_type{ RESPONSE, REQUEST };
 
+    struct broker_settings {
+        int timeout = -1;
+        int retries = 0;
+    };
+
     class message_broker {
     public:
         typedef std::vector<uint8_t> data_type;
 
-        message_broker(const zmq_type _type, zmq::context_t* _zmq_ctx_ptr) :
-            ctx_ptr_(_zmq_ctx_ptr), do_not_delete_ctx_ptr_(true) {
+        message_broker(const zmq_type _type, const broker_settings& _settings, zmq::context_t* _zmq_ctx_ptr) :
+            ctx_ptr_{_zmq_ctx_ptr}, do_not_delete_ctx_ptr_{true}, settings_{_settings} {
             try {
                 create_socket(_type);
+                zmq_setsockopt(ctx_ptr_, ZMQ_RCVTIMEO, &_settings.timeout, sizeof(_settings.timeout));
+                zmq_setsockopt(ctx_ptr_, ZMQ_SNDTIMEO, &_settings.timeout, sizeof(_settings.timeout));
             }
             catch ( const zmq::error_t& _e) {
                 THROW(INVALID_OPERATION, _e.what());
             }
         }
 
-        message_broker(const zmq_type _type) :
-            ctx_ptr_(new zmq::context_t(1)), do_not_delete_ctx_ptr_(false) {
+        message_broker(const zmq_type _type, const broker_settings& _settings) :
+            ctx_ptr_{new zmq::context_t{1}}, do_not_delete_ctx_ptr_{false}, settings_{_settings} {
             try {
                 create_socket(_type);
+                zmq_setsockopt(ctx_ptr_, ZMQ_RCVTIMEO, &_settings.timeout, sizeof(_settings.timeout));
+                zmq_setsockopt(ctx_ptr_, ZMQ_SNDTIMEO, &_settings.timeout, sizeof(_settings.timeout));
             }
             catch ( const zmq::error_t& _e) {
                 THROW(INVALID_OPERATION, _e.what());
@@ -158,6 +165,7 @@ namespace irods {
         zmq::message_t receive_zmq(const int flags, const bool debug) const {
             try {
                 zmq::message_t msg{};
+                int retries = 0;
                 while(true) {
                     int ret = skt_ptr_->recv( &msg, flags );
                     if(-1 == ret && ZMQ_DONTWAIT == flags) {
@@ -173,9 +181,14 @@ namespace irods {
                     }
                     else if(ret <= 0 && ZMQ_DONTWAIT != flags) {
                         int eno = zmq_errno();
-                        std::cout << "read error :: ret - " << ret << "    errno - " << eno << std::endl;
-                        if(EAGAIN == ret || eno == EAGAIN) {
-                            THROW(SYS_SOCK_READ_ERR, "time out in receive");
+                        //std::cout << "read error :: ret - " << ret << "    errno - " << eno << std::endl;
+                        if(EAGAIN == ret || EAGAIN == eno) {
+                            retries++;
+                            if (retries > settings_.retries) {
+                                THROW(SYS_SOCK_READ_ERR, boost::format("read error on recv. Connection timed out and maximum retry count exceeded."));
+                            }
+                        } else {
+                            THROW(SYS_SOCK_READ_ERR, boost::format("read error on recv. return code: %d, errno: %d") % ret % eno);
                         }
 
                         //TODO: need backoff
@@ -192,8 +205,9 @@ namespace irods {
         }
 
         zmq::context_t* ctx_ptr_;
-        bool do_not_delete_ctx_ptr_;
+        const bool do_not_delete_ctx_ptr_;
         std::unique_ptr<zmq::socket_t> skt_ptr_;
+        const broker_settings settings_;
 
     }; // class message_broker
 
