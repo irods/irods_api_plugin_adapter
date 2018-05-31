@@ -17,7 +17,7 @@
 #include <set>
 
 namespace irods {
-    typedef std::function<int(zmq::context_t&, const std::string&)> client_fcn_t;
+    typedef std::function<int(std::shared_ptr<zmq::context_t>, const std::string&)> client_fcn_t;
 
     static const int UNINITIALIZED_PORT = -1;
 
@@ -71,9 +71,9 @@ namespace irods {
             done_flag_ = _b;
         }
 
-        zmq::context_t* ctrl_ctx() { return ctrl_ctx_; }
+        std::shared_ptr<zmq::context_t> ctrl_ctx() { return ctrl_ctx_; }
 
-        void ctrl_ctx(zmq::context_t* _ctrl_ctx) {
+        void ctrl_ctx(std::shared_ptr<zmq::context_t> _ctrl_ctx) {
             ctrl_ctx_ = _ctrl_ctx;
         }
 
@@ -134,7 +134,7 @@ namespace irods {
 
     protected:
 
-        zmq::context_t*  ctrl_ctx_;
+        std::shared_ptr<zmq::context_t>  ctrl_ctx_;
         boost::any       comm_;
         connection_t     connection_type_;
         std::string      name_;
@@ -219,7 +219,7 @@ namespace irods {
         const int                       _port,
         const std::string&              _zone,
         const std::string&              _user,
-        zmq::context_t&                 _zmq_ctx,
+        std::shared_ptr<zmq::context_t> _zmq_ctx,
         client_fcn_t                    _cli_fcn,
         std::shared_ptr<api_endpoint>   _ep_ptr,
         const std::string&              _subcommand,
@@ -227,7 +227,7 @@ namespace irods {
 
     void api_v5_call_client(
         rcComm_t*                       _comm,
-        zmq::context_t&                 _zmq_ctx,
+        std::shared_ptr<zmq::context_t> _zmq_ctx,
         client_fcn_t                    _cli_fcn,
         std::shared_ptr<api_endpoint>   _ep_ptr,
         const std::string&              _subcommand,
@@ -237,7 +237,7 @@ namespace irods {
     void api_v5_to_v5_call_endpoint(
         CommType*                            _conn,
         std::shared_ptr<irods::api_endpoint> _ep_ptr,
-        zmq::context_t*                      _zmq_ctx) {
+        std::shared_ptr<zmq::context_t>      _zmq_ctx) {
         // =-=-=-=-=-=-=-
         // initialize the client-side of the endpoint
         _ep_ptr->comm(_conn);

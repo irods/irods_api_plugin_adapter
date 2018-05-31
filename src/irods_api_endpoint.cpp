@@ -14,7 +14,7 @@ namespace irods {
         const int                       _port,
         const std::string&              _zone,
         const std::string&              _user,
-        zmq::context_t&                 _zmq_ctx,
+        std::shared_ptr<zmq::context_t> _zmq_ctx,
         client_fcn_t                    _cli_fcn,
         std::shared_ptr<api_endpoint>   _ep_ptr,
         const std::string&              _subcommand,
@@ -47,7 +47,7 @@ namespace irods {
 
     void api_v5_call_client(
         rcComm_t*                       _conn,
-        zmq::context_t&                 _zmq_ctx,
+        std::shared_ptr<zmq::context_t> _zmq_ctx,
         client_fcn_t                    _cli_fcn,
         std::shared_ptr<api_endpoint>   _ep_ptr,
         const std::string&              _subcommand,
@@ -63,7 +63,7 @@ namespace irods {
             // initialize the client-side of the endpoint
             try {
                 _ep_ptr->comm(_conn);
-                _ep_ptr->ctrl_ctx(&_zmq_ctx);
+                _ep_ptr->ctrl_ctx(_zmq_ctx);
                 _ep_ptr->initialize_from_command(_subcommand, _args);
                 envelope.payload = _ep_ptr->get_request_as_bytes();
             }

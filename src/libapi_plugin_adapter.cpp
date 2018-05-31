@@ -97,9 +97,9 @@ int rs_api_plugin_adapter(
                 envelope.connection_type);
         // =-=-=-=-=-=-=-
         // initialize the API plugin with the payload
-        zmq::context_t zmq_ctx(1);
+        auto zmq_ctx = std::make_shared<zmq::context_t>(1);
         ep_ptr->comm(_comm);
-        ep_ptr->ctrl_ctx(&zmq_ctx);
+        ep_ptr->ctrl_ctx(zmq_ctx);
         ep_ptr->setup_from_api_request(envelope.payload);
 
         // =-=-=-=-=-=-=-

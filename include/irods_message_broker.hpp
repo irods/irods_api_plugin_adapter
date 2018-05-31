@@ -23,12 +23,12 @@ namespace irods {
     public:
         typedef std::vector<uint8_t> data_type;
 
-        message_broker(const zmq_type _type, const broker_settings& _settings, zmq::context_t* _zmq_ctx_ptr) :
-            ctx_ptr_{_zmq_ctx_ptr}, do_not_delete_ctx_ptr_{true}, settings_{_settings} {
+        message_broker(const zmq_type _type, const broker_settings& _settings, std::shared_ptr<zmq::context_t> _zmq_ctx_ptr) :
+            ctx_ptr_{_zmq_ctx_ptr}, settings_{_settings} {
             try {
                 create_socket(_type);
-                zmq_setsockopt(ctx_ptr_, ZMQ_RCVTIMEO, &_settings.timeout, sizeof(_settings.timeout));
-                zmq_setsockopt(ctx_ptr_, ZMQ_SNDTIMEO, &_settings.timeout, sizeof(_settings.timeout));
+                zmq_setsockopt(ctx_ptr_.get(), ZMQ_RCVTIMEO, &_settings.timeout, sizeof(_settings.timeout));
+                zmq_setsockopt(ctx_ptr_.get(), ZMQ_SNDTIMEO, &_settings.timeout, sizeof(_settings.timeout));
             }
             catch ( const zmq::error_t& _e) {
                 THROW(INVALID_OPERATION, _e.what());
@@ -36,11 +36,11 @@ namespace irods {
         }
 
         message_broker(const zmq_type _type, const broker_settings& _settings) :
-            ctx_ptr_{new zmq::context_t{1}}, do_not_delete_ctx_ptr_{false}, settings_{_settings} {
+            ctx_ptr_{std::make_shared<zmq::context_t>(1)}, settings_{_settings} {
             try {
                 create_socket(_type);
-                zmq_setsockopt(ctx_ptr_, ZMQ_RCVTIMEO, &_settings.timeout, sizeof(_settings.timeout));
-                zmq_setsockopt(ctx_ptr_, ZMQ_SNDTIMEO, &_settings.timeout, sizeof(_settings.timeout));
+                zmq_setsockopt(ctx_ptr_.get(), ZMQ_RCVTIMEO, &_settings.timeout, sizeof(_settings.timeout));
+                zmq_setsockopt(ctx_ptr_.get(), ZMQ_SNDTIMEO, &_settings.timeout, sizeof(_settings.timeout));
             }
             catch ( const zmq::error_t& _e) {
                 THROW(INVALID_OPERATION, _e.what());
@@ -49,9 +49,6 @@ namespace irods {
 
         ~message_broker() {
             skt_ptr_->close();
-            if(!do_not_delete_ctx_ptr_) {
-                delete ctx_ptr_;
-            }
         }
 
         template<typename T>
@@ -204,8 +201,7 @@ namespace irods {
             return {};
         }
 
-        zmq::context_t* ctx_ptr_;
-        const bool do_not_delete_ctx_ptr_;
+        std::shared_ptr<zmq::context_t> ctx_ptr_;
         std::unique_ptr<zmq::socket_t> skt_ptr_;
         const broker_settings settings_;
 

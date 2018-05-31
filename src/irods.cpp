@@ -29,10 +29,10 @@
 namespace po = boost::program_options;
 
 int client_interaction(
-    zmq::context_t&    _zmq_ctx,
+    std::shared_ptr<zmq::context_t>    _zmq_ctx,
     const std::string& _ep_name) {
 
-    zmq::socket_t zmq_skt(_zmq_ctx, ZMQ_REQ);
+    zmq::socket_t zmq_skt(*_zmq_ctx, ZMQ_REQ);
     zmq_skt.bind("inproc://client_comms");
 
     try {
@@ -213,7 +213,7 @@ int main( int _argc, char* _argv[] ) {
     }
 
     try {
-        zmq::context_t zmq_ctx(1);
+        auto zmq_ctx = std::make_shared<zmq::context_t>(1);
         irods::api_v5_call_client(
             myEnv.rodsHost,
             myEnv.rodsPort,
